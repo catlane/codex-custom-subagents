@@ -190,6 +190,21 @@ anything, bisect `config.toml`: back it up, test with only the
 `model_provider`/`model` lines, then add sections back in groups until the
 failure returns.
 
+## Subagent Runs But The Provider Returns HTTP 404
+
+If a custom subagent starts and its turn fails with an HTTP `404` from the
+provider endpoint, the request reached the provider; this is not a Codex
+account-group or catalog problem. Check the registered wire API first:
+plugins before 0.1.4 registered providers with `wire_api = "responses"`,
+but DeepSeek and Volcengine OpenAI-compatible endpoints only serve Chat
+Completions, so Codex received `404` for the unsupported path. Upgrade the
+plugin to 0.1.4 or later, rerun its conversational configuration (the
+existing Keychain credential is reused when the endpoint is unchanged),
+fully quit Codex, and retry in a fresh task. If `404` persists on 0.1.4 or
+later, verify the configured model name exists on the provider's official
+model list and that the endpoint URL is exactly the provider's documented
+base URL.
+
 ## Fail-Closed Recovery
 
 Before manual recovery, fully quit Codex and make a filesystem copy of

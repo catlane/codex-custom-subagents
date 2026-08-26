@@ -94,8 +94,9 @@ printf '%s\n' '{"schema_version":1,"provider_display_name":"Fixture","wire_api":
 printf '%s\n' '{"schema_version":1,"provider_display_name":"Fixture","wire_api":"responses","profiles":{"general":{"description":"g","developer_instructions":"g","sandbox_mode":"read-only"},"developer":{"description":"d","developer_instructions":"d"},"reviewer":{"description":"r","developer_instructions":"r","sandbox_mode":"read-only","approval_policy":"never"}}}' >"$TEMP_ROOT/general-extra.json"
 printf '%s\n' '{"schema_version":1,"provider_display_name":"Fixture","wire_api":"responses","profiles":{"general":{"description":"g","developer_instructions":"g"},"developer":{"description":"d","developer_instructions":"d"},"reviewer":{"description":"r","developer_instructions":"r","sandbox_mode":"workspace-write","approval_policy":"never"}}}' >"$TEMP_ROOT/bad-reviewer.json"
 printf '%s\n' '{"schema_version":1,"provider_display_name":"Fixture","wire_api":"responses","profiles":{"general":{"description":"g","developer_instructions":"g"},"developer":{"description":"d","developer_instructions":"d"},"reviewer":{"description":"r","developer_instructions":"r","sandbox_mode":"read-only","approval_policy":"never"},"planner":{"description":"p","developer_instructions":"p"}}}' >"$TEMP_ROOT/extra-role.json"
+printf '%s\n' '{"schema_version":1,"provider_display_name":"Fixture","wire_api":"websocket","profiles":{"general":{"description":"g","developer_instructions":"g"},"developer":{"description":"d","developer_instructions":"d"},"reviewer":{"description":"r","developer_instructions":"r","sandbox_mode":"read-only","approval_policy":"never"}}}' >"$TEMP_ROOT/bad-wire-api.json"
 
-for invalid in top-extra missing-reviewer general-extra bad-reviewer extra-role; do
+for invalid in top-extra missing-reviewer general-extra bad-reviewer extra-role bad-wire-api; do
   assert_rejected "$invalid" render_state "$TEMP_ROOT/$invalid.json" general
 done
 assert_rejected invalid-role render_state "$SPEC" planner

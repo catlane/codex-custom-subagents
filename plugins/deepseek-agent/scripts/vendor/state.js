@@ -355,7 +355,7 @@ function readSpec(path) {
   let spec;
   try { spec = JSON.parse(text); } catch (_) { fail("agent spec is not valid JSON"); }
   assertExactKeys(spec, ["schema_version", "provider_display_name", "wire_api", "profiles"], "provider");
-  if (spec.schema_version !== 1 || spec.wire_api !== "responses") fail("invalid agent spec");
+  if (spec.schema_version !== 1 || (spec.wire_api !== "chat" && spec.wire_api !== "responses")) fail("invalid agent spec");
   boundedString(spec.provider_display_name, "provider_display_name", true);
   assertExactKeys(spec.profiles, ["general", "developer", "reviewer"], "profiles");
   ["general", "developer"].forEach(function (role) {
@@ -389,7 +389,7 @@ function renderAgentSpec(specPath, values) {
   ];
   if (values.role === "reviewer") lines.push('sandbox_mode = "read-only"', 'approval_policy = "never"');
   lines.push("", '[model_providers.' + values.provider + ']', 'name = "' + tomlString(spec.provider_display_name) + '"',
-    'base_url = "' + tomlString(values.endpoint) + '"', 'wire_api = "responses"', 'requires_openai_auth = false', "",
+    'base_url = "' + tomlString(values.endpoint) + '"', 'wire_api = "' + tomlString(spec.wire_api) + '"', 'requires_openai_auth = false', "",
     '[model_providers.' + values.provider + '.auth]', 'command = "/usr/bin/security"',
     'args = ["find-generic-password", "-w", "-s", "' + tomlString(values.keychain_service) + '", "-a", "api-key"]');
   return lines.join("\n");

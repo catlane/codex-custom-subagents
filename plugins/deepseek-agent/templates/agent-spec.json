@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "provider_display_name": "DeepSeek",
-  "wire_api": "responses",
+  "wire_api": "chat",
   "profiles": {
     "general": {
       "description": "DeepSeek general-purpose subagent for bounded analysis, investigation, and execution",

@@ -437,7 +437,7 @@ for role in general developer reviewer; do
   assert_contains "$profile_agent" "name = \"deepseek_$role\""
   assert_contains "$profile_agent" 'model_provider = "deepseek"'
   assert_contains "$profile_agent" 'base_url = "https://api.deepseek.com"'
-  assert_contains "$profile_agent" 'wire_api = "responses"'
+  assert_contains "$profile_agent" 'wire_api = "chat"'
   assert_contains "$profile_agent" 'requires_openai_auth = false'
   assert_contains "$profile_agent" 'args = ["find-generic-password", "-w", "-s", "codex-custom-subagent/deepseek-agent", "-a", "api-key"]'
   assert_not_contains "$profile_agent" '[agent]'

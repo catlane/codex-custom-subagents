@@ -1,6 +1,6 @@
 {
   "name": "volcengine-agent",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "在 Codex Desktop 中配置和管理火山引擎通用、开发及只读审查子智能体。",
   "author": {
     "name": "猫巷",
