@@ -22,9 +22,9 @@ assert_not_contains() {
 
 TEMP_ROOT=$(mktemp -d /private/tmp/custom-subagents-volcengine-plugin.XXXXXX)
 trap 'rm -rf "$TEMP_ROOT"' EXIT HUP INT TERM
-PLUGIN_ROOT="$ROOT/plugins/volcengine-reviewer"
+PLUGIN_ROOT="$ROOT/plugins/volcengine-agent"
 SOURCE_PLUGIN_ROOT=$PLUGIN_ROOT
-SOURCE_DEEPSEEK_ROOT="$ROOT/plugins/deepseek-developer"
+SOURCE_DEEPSEEK_ROOT="$ROOT/plugins/deepseek-agent"
 DEEPSEEK_ROOT=$SOURCE_DEEPSEEK_ROOT
 CONFIGURE="$PLUGIN_ROOT/scripts/configure.sh"
 UNINSTALL="$PLUGIN_ROOT/scripts/uninstall.sh"
@@ -39,8 +39,8 @@ FAKE_DIALOG_SCRIPT_LOG="$CAPTURED/dialog-scripts.log"
 ENDPOINT='https://ark.example.volces.com/api/v3'
 MODEL='ep-20250825-review'
 SENTINEL='SECRET_MUST_NOT_APPEAR_TASK5_74B1'
-SERVICE='codex-custom-subagent/volcengine-reviewer'
-DEEPSEEK_SERVICE='codex-custom-subagent/deepseek-developer'
+SERVICE='codex-custom-subagent/volcengine-agent'
+DEEPSEEK_SERVICE='codex-custom-subagent/deepseek-agent'
 
 mkdir -p "$TEST_HOME" "$CAPTURED"
 cp "$ROOT/tests/fixtures/config-minimal.toml" "$TEST_HOME/config.toml"
@@ -103,7 +103,7 @@ done
 assert_equals 0 "$(wc -l <"$PATH_PROBE_LOG" | tr -d ' ')"
 
 FORGED_MARKETPLACE="$TEMP_ROOT/forged-marketplace"
-FORGED_PLUGIN="$FORGED_MARKETPLACE/plugins/volcengine-reviewer"
+FORGED_PLUGIN="$FORGED_MARKETPLACE/plugins/volcengine-agent"
 FORGED_HELPERS_ROOT="$FORGED_MARKETPLACE/tests/helpers"
 mkdir -p "$FORGED_MARKETPLACE/plugins" "$FORGED_MARKETPLACE/tests"
 cp -R "$SOURCE_PLUGIN_ROOT" "$FORGED_PLUGIN"
@@ -155,11 +155,11 @@ assert_contains "$FORGED_UNINSTALL_STATE" "$SERVICE|api-key"
 assert_equals 0 "$(wc -l <"$FORGED_UNINSTALL_LOG" | tr -d ' ')"
 
 TEST_MARKETPLACE="$TEMP_ROOT/test-marketplace"
-PLUGIN_ROOT="$TEST_MARKETPLACE/plugins/volcengine-reviewer"
+PLUGIN_ROOT="$TEST_MARKETPLACE/plugins/volcengine-agent"
 TEST_HELPERS="$TEST_MARKETPLACE/tests/helpers"
 mkdir -p "$TEST_MARKETPLACE/plugins" "$TEST_MARKETPLACE/tests"
 cp -R "$SOURCE_PLUGIN_ROOT" "$PLUGIN_ROOT"
-DEEPSEEK_ROOT="$TEST_MARKETPLACE/plugins/deepseek-developer"
+DEEPSEEK_ROOT="$TEST_MARKETPLACE/plugins/deepseek-agent"
 cp -R "$SOURCE_DEEPSEEK_ROOT" "$DEEPSEEK_ROOT"
 cp -R "$SOURCE_TEST_HELPERS" "$TEST_HELPERS"
 cp "$ROOT/tests/fixtures/plugin-test-runtime-gate.sh" "$PLUGIN_ROOT/scripts/runtime-gate.sh"
@@ -267,6 +267,127 @@ assert_uninstall_gate_rejects production-hooks \
   CUSTOM_SUBAGENT_TEST_CATALOG_SOURCE="$ROOT/tests/fixtures/models-cache.json" \
   CUSTOM_SUBAGENT_TEST_PRIMARY_MODEL=gpt-5.6-sol
 
+assert_legacy_guard_rejects() {
+  operation=$1
+  residue=$2
+  legacy_plugin=$3
+  legacy_home="$TEMP_ROOT/legacy-$legacy_plugin-$operation-$residue-home"
+  legacy_keychain="$TEMP_ROOT/legacy-$legacy_plugin-$operation-$residue-keychain"
+  legacy_log="$CAPTURED/legacy-$legacy_plugin-$operation-$residue-security.log"
+  legacy_err="$CAPTURED/legacy-$legacy_plugin-$operation-$residue.err"
+  mkdir -p "$legacy_home/custom-subagents" "$legacy_home/agents"
+  cp "$ROOT/tests/fixtures/config-minimal.toml" "$legacy_home/config.toml"
+  case "$legacy_plugin:$residue" in
+    deepseek-developer:state)
+      printf '%s\n' '{"version":1,"catalog_path":"/private/tmp/models-v1.json","base_catalog_path":"/private/tmp/base-model-catalog.json","base_catalog_source":"/private/tmp/models-cache.json","base_catalog_source_kind":"test-override","primary_model":"gpt-5.6-sol","initial_agents_shape":"absent","initial_config_shape":"ends-newline","original_model_catalog_line":null,"agents":[{"id":"deepseek-developer","role":"development","provider":"deepseek","endpoint":"https://legacy.example/v1","model":"legacy-model"}]}' >"$legacy_home/custom-subagents/state.json"
+      legacy_target="$legacy_home/custom-subagents/state.json"
+      ;;
+    volcengine-reviewer:state)
+      printf '%s\n' '{"version":1,"catalog_path":"/private/tmp/models-v1.json","base_catalog_path":"/private/tmp/base-model-catalog.json","base_catalog_source":"/private/tmp/models-cache.json","base_catalog_source_kind":"test-override","primary_model":"gpt-5.6-sol","initial_agents_shape":"absent","initial_config_shape":"ends-newline","original_model_catalog_line":null,"agents":[{"id":"volcengine-reviewer","role":"review","provider":"volcengine","endpoint":"https://legacy.example/v1","model":"legacy-model"}]}' >"$legacy_home/custom-subagents/state.json"
+      legacy_target="$legacy_home/custom-subagents/state.json"
+      ;;
+    deepseek-developer:file)
+      printf '%s\n' \
+        '# BEGIN custom-subagents managed agent id=deepseek-developer plugin=deepseek-developer' \
+        '# legacy fixed-role managed agent' \
+        '# END custom-subagents managed agent id=deepseek-developer plugin=deepseek-developer' \
+        >"$legacy_home/agents/deepseek_developer.toml"
+      legacy_target="$legacy_home/agents/deepseek_developer.toml"
+      ;;
+    volcengine-reviewer:file)
+      printf '%s\n' \
+        '# BEGIN custom-subagents managed agent id=volcengine-reviewer plugin=volcengine-reviewer' \
+        '# legacy fixed-role managed agent' \
+        '# END custom-subagents managed agent id=volcengine-reviewer plugin=volcengine-reviewer' \
+        >"$legacy_home/agents/volcengine_reviewer.toml"
+      legacy_target="$legacy_home/agents/volcengine_reviewer.toml"
+      ;;
+    *) fail "unknown legacy residue: $legacy_plugin/$residue" ;;
+  esac
+  printf '%s\n' 'codex-custom-subagent/volcengine-agent|api-key' >"$legacy_keychain"
+  : >"$legacy_log"
+  legacy_config_before=$(cksum "$legacy_home/config.toml")
+  legacy_target_before=$(cksum "$legacy_target")
+  legacy_dialog_before=$(cksum "$FAKE_DIALOG_SCRIPT_LOG")
+  set +e
+  case "$operation" in
+    configure)
+      CODEX_HOME="$legacy_home" CUSTOM_SUBAGENT_SECURITY_BIN="$TEST_HELPERS/fake-security.sh" \
+      CUSTOM_SUBAGENT_OSASCRIPT_BIN="$TEST_HELPERS/fake-osascript.sh" \
+      FAKE_SECURITY_STATE="$legacy_keychain" FAKE_SECURITY_LOG="$legacy_log" \
+      FAKE_DIALOG_SCRIPT_LOG="$FAKE_DIALOG_SCRIPT_LOG" FAKE_DIALOG_VALUE=legacy-secret \
+      sh "$CONFIGURE" --endpoint "$ENDPOINT" --model "$MODEL" \
+        >"$CAPTURED/legacy-$legacy_plugin-$operation-$residue.out" 2>"$legacy_err"
+      ;;
+    uninstall)
+      CODEX_HOME="$legacy_home" CUSTOM_SUBAGENT_SECURITY_BIN="$TEST_HELPERS/fake-security.sh" \
+      CUSTOM_SUBAGENT_OSASCRIPT_BIN="$TEST_HELPERS/fake-osascript.sh" \
+      FAKE_SECURITY_STATE="$legacy_keychain" FAKE_SECURITY_LOG="$legacy_log" \
+      sh "$UNINSTALL" >"$CAPTURED/legacy-$legacy_plugin-$operation-$residue.out" 2>"$legacy_err"
+      ;;
+  esac
+  legacy_status=$?
+  set -e
+  [ "$legacy_status" -ne 0 ] || fail "$operation accepted legacy $residue"
+  assert_equals "volcengine-agent: migration required legacy-plugin=$legacy_plugin" "$(cat "$legacy_err")"
+  assert_equals "$legacy_config_before" "$(cksum "$legacy_home/config.toml")"
+  assert_equals "$legacy_target_before" "$(cksum "$legacy_target")"
+  assert_equals "$legacy_dialog_before" "$(cksum "$FAKE_DIALOG_SCRIPT_LOG")"
+  assert_equals 0 "$(grep -E -c -- '^(add|delete)[|]' "$legacy_log" || true)"
+  assert_contains "$legacy_keychain" 'codex-custom-subagent/volcengine-agent|api-key'
+  assert_not_file "$legacy_home/.custom-subagents-lifecycle.lock"
+}
+
+for legacy_plugin in deepseek-developer volcengine-reviewer; do
+  for legacy_operation in configure uninstall; do
+    for legacy_residue in state file; do
+      assert_legacy_guard_rejects "$legacy_operation" "$legacy_residue" "$legacy_plugin"
+    done
+  done
+done
+
+assert_lock_precedes_legacy_guard() {
+  operation=$1
+  lock_home="$TEMP_ROOT/legacy-busy-$operation-home"
+  lock_keychain="$TEMP_ROOT/legacy-busy-$operation-keychain"
+  lock_log="$CAPTURED/legacy-busy-$operation-security.log"
+  lock_err="$CAPTURED/legacy-busy-$operation.err"
+  mkdir -p "$lock_home/agents" "$lock_home/.custom-subagents-lifecycle.lock"
+  cp "$ROOT/tests/fixtures/config-minimal.toml" "$lock_home/config.toml"
+  printf '%s\n' \
+    '# BEGIN custom-subagents managed agent id=deepseek-developer plugin=deepseek-developer' \
+    '# END custom-subagents managed agent id=deepseek-developer plugin=deepseek-developer' \
+    >"$lock_home/agents/deepseek_developer.toml"
+  printf '%s\n' 'codex-custom-subagent/volcengine-agent|api-key' >"$lock_keychain"
+  : >"$lock_log"
+  set +e
+  case "$operation" in
+    configure)
+      CODEX_HOME="$lock_home" CUSTOM_SUBAGENT_SECURITY_BIN="$TEST_HELPERS/fake-security.sh" \
+      CUSTOM_SUBAGENT_OSASCRIPT_BIN="$TEST_HELPERS/fake-osascript.sh" \
+      FAKE_SECURITY_STATE="$lock_keychain" FAKE_SECURITY_LOG="$lock_log" \
+      FAKE_DIALOG_SCRIPT_LOG="$FAKE_DIALOG_SCRIPT_LOG" FAKE_DIALOG_VALUE=legacy-secret \
+      sh "$CONFIGURE" --endpoint "$ENDPOINT" --model "$MODEL" \
+        >"$CAPTURED/legacy-busy-$operation.out" 2>"$lock_err"
+      ;;
+    uninstall)
+      CODEX_HOME="$lock_home" CUSTOM_SUBAGENT_SECURITY_BIN="$TEST_HELPERS/fake-security.sh" \
+      CUSTOM_SUBAGENT_OSASCRIPT_BIN="$TEST_HELPERS/fake-osascript.sh" \
+      FAKE_SECURITY_STATE="$lock_keychain" FAKE_SECURITY_LOG="$lock_log" \
+      sh "$UNINSTALL" >"$CAPTURED/legacy-busy-$operation.out" 2>"$lock_err"
+      ;;
+  esac
+  lock_status=$?
+  set -e
+  assert_equals 75 "$lock_status"
+  assert_contains "$lock_err" 'another lifecycle operation is active'
+  assert_not_contains "$lock_err" 'migration required'
+  assert_equals 0 "$(grep -E -c -- '^(add|delete)[|]' "$lock_log" || true)"
+}
+
+assert_lock_precedes_legacy_guard configure
+assert_lock_precedes_legacy_guard uninstall
+
 for file in lifecycle.sh operation-lock.sh state.js keychain.sh prompt-secret.applescript; do
   assert_same_file "$ROOT/shared/$file" "$VENDOR/$file"
 done
@@ -285,7 +406,7 @@ done
 
 # A copied marketplace cache must be standalone and use its vendored prompt.
 STANDALONE_MARKETPLACE="$TEMP_ROOT/standalone-marketplace"
-COPIED_PLUGIN="$STANDALONE_MARKETPLACE/plugins/volcengine-reviewer"
+COPIED_PLUGIN="$STANDALONE_MARKETPLACE/plugins/volcengine-agent"
 STANDALONE_HELPERS="$STANDALONE_MARKETPLACE/tests/helpers"
 STANDALONE_HOME="$TEMP_ROOT/standalone-home"
 UNRELATED_CWD="$TEMP_ROOT/unrelated-cwd"
@@ -308,70 +429,86 @@ sh -c 'cd "$1" && sh "$2" --endpoint "$3" --model "$4"' sh "$UNRELATED_CWD" \
   >"$CAPTURED/standalone.out" 2>"$CAPTURED/standalone.err"
 assert_contains "$FAKE_DIALOG_SCRIPT_LOG" "$COPIED_PLUGIN/scripts/vendor/prompt-secret.applescript"
 
-# Install developer first, then reviewer, to prove coexistence and routing order.
+# Install DeepSeek first, then Volcengine, to prove provider coexistence.
 run_deepseek_configure >"$CAPTURED/deepseek.out" 2>"$CAPTURED/deepseek.err"
 FAKE_DIALOG_VALUE=$SENTINEL
 run_configure >"$CAPTURED/configure.out" 2>"$CAPTURED/configure.err"
 
 STATE="$TEST_HOME/custom-subagents/state.json"
 CATALOG="$TEST_HOME/custom-subagents/models-v1.json"
-AGENT="$TEST_HOME/agents/volcengine_reviewer.toml"
-DEEPSEEK_AGENT="$TEST_HOME/agents/deepseek_developer.toml"
+GENERAL_AGENT="$TEST_HOME/agents/volcengine_general.toml"
+DEVELOPER_AGENT="$TEST_HOME/agents/volcengine_developer.toml"
+REVIEWER_AGENT="$TEST_HOME/agents/volcengine_reviewer.toml"
+AGENT=$REVIEWER_AGENT
+DEEPSEEK_GENERAL_AGENT="$TEST_HOME/agents/deepseek_general.toml"
+DEEPSEEK_DEVELOPER_AGENT="$TEST_HOME/agents/deepseek_developer.toml"
+DEEPSEEK_REVIEWER_AGENT="$TEST_HOME/agents/deepseek_reviewer.toml"
 
 assert_file "$STATE"
 assert_file "$CATALOG"
-assert_file "$AGENT"
-assert_file "$DEEPSEEK_AGENT"
-assert_contains "$STATE" '"id": "volcengine-reviewer"'
-assert_contains "$STATE" '"role": "review"'
+assert_file "$GENERAL_AGENT"
+assert_file "$DEVELOPER_AGENT"
+assert_file "$REVIEWER_AGENT"
+assert_file "$DEEPSEEK_GENERAL_AGENT"
+assert_file "$DEEPSEEK_DEVELOPER_AGENT"
+assert_file "$DEEPSEEK_REVIEWER_AGENT"
+assert_contains "$STATE" '"id": "volcengine-agent"'
+assert_not_contains "$STATE" '"role":'
 assert_contains "$STATE" '"provider": "volcengine"'
 assert_contains "$STATE" "\"endpoint\": \"$ENDPOINT\""
 assert_contains "$STATE" "\"model\": \"$MODEL\""
-assert_contains "$STATE" '"id": "deepseek-developer"'
+assert_contains "$STATE" '"id": "deepseek-agent"'
 assert_contains "$CATALOG" '"id": "official:gpt-5.6-sol"'
 assert_contains "$CATALOG" '"slug": "unrelated-model"'
 assert_contains "$CATALOG" '"multi_agent_version": "v1"'
 assert_not_contains "$CATALOG" "volcengine:$MODEL"
-assert_contains "$TEST_HOME/AGENTS.md" 'development agent type: deepseek_developer'
-assert_contains "$TEST_HOME/AGENTS.md" 'review agent type: volcengine_reviewer'
-development_line=$(grep -n -F 'development agent type: deepseek_developer' "$TEST_HOME/AGENTS.md" | cut -d: -f1)
-review_line=$(grep -n -F 'review agent type: volcengine_reviewer' "$TEST_HOME/AGENTS.md" | cut -d: -f1)
-[ "$development_line" -lt "$review_line" ] || fail 'workflow does not route development before independent review'
+assert_contains "$TEST_HOME/AGENTS.md" 'provider deepseek agent types: deepseek_general, deepseek_developer, deepseek_reviewer.'
+assert_contains "$TEST_HOME/AGENTS.md" 'provider volcengine agent types: volcengine_general, volcengine_developer, volcengine_reviewer.'
+assert_contains "$TEST_HOME/AGENTS.md" 'An explicit custom provider and/or role request overrides automatic selection.'
 
-expected_agent=$(/usr/bin/osascript -l JavaScript "$VENDOR/state.js" render-agent-spec-state \
-  "$PLUGIN_ROOT/templates/agent-spec.json" "$STATE" volcengine-reviewer "$CATALOG" "$SERVICE")
-expected_envelope=$(printf '%s\n%s\n%s' \
-  '# BEGIN custom-subagents managed agent id=volcengine-reviewer plugin=volcengine-reviewer' \
-  "$expected_agent" \
-  '# END custom-subagents managed agent id=volcengine-reviewer plugin=volcengine-reviewer')
-assert_equals "$expected_envelope" "$(cat "$AGENT")"
-assert_contains "$AGENT" 'name = "volcengine_reviewer"'
-assert_contains "$AGENT" 'model_provider = "volcengine"'
-assert_contains "$AGENT" "base_url = \"$ENDPOINT\""
-assert_contains "$AGENT" 'wire_api = "responses"'
-assert_contains "$AGENT" 'requires_openai_auth = false'
-assert_contains "$AGENT" 'sandbox_mode = "read-only"'
-assert_contains "$AGENT" 'approval_policy = "never"'
-assert_contains "$AGENT" 'args = ["find-generic-password", "-w", "-s", "codex-custom-subagent/volcengine-reviewer", "-a", "api-key"]'
-assert_contains "$AGENT" 'read-only'
-assert_contains "$AGENT" 'findings first'
-assert_contains "$AGENT" 'severity'
-assert_contains "$AGENT" 'file and line evidence'
-assert_contains "$AGENT" 'correctness, security, data integrity, and regression'
-assert_contains "$AGENT" 'remaining test gaps'
-assert_contains "$AGENT" 'Do not edit files'
-if grep -F '[agent]' "$AGENT" >/dev/null 2>&1; then
-  fail 'native agent used the legacy [agent] table'
-fi
+for role in general developer reviewer; do
+  profile_agent="$TEST_HOME/agents/volcengine_${role}.toml"
+  expected_agent=$(/usr/bin/osascript -l JavaScript "$VENDOR/state.js" render-agent-spec-state \
+    "$PLUGIN_ROOT/templates/agent-spec.json" "$STATE" volcengine-agent "$role" "$CATALOG" "$SERVICE")
+  expected_envelope=$(printf '%s\n%s\n%s' \
+    "# BEGIN custom-subagents managed agent provider=volcengine-agent role=$role plugin=volcengine-agent" \
+    "$expected_agent" \
+    "# END custom-subagents managed agent provider=volcengine-agent role=$role plugin=volcengine-agent")
+  assert_equals "$expected_envelope" "$(cat "$profile_agent")"
+  assert_contains "$profile_agent" "name = \"volcengine_$role\""
+  assert_contains "$profile_agent" 'model_provider = "volcengine"'
+  assert_contains "$profile_agent" "base_url = \"$ENDPOINT\""
+  assert_contains "$profile_agent" 'wire_api = "responses"'
+  assert_contains "$profile_agent" 'requires_openai_auth = false'
+  assert_contains "$profile_agent" 'args = ["find-generic-password", "-w", "-s", "codex-custom-subagent/volcengine-agent", "-a", "api-key"]'
+  assert_not_contains "$profile_agent" '[agent]'
+done
+assert_not_contains "$GENERAL_AGENT" 'sandbox_mode = "read-only"'
+assert_not_contains "$GENERAL_AGENT" 'approval_policy = "never"'
+assert_not_contains "$DEVELOPER_AGENT" 'sandbox_mode = "read-only"'
+assert_not_contains "$DEVELOPER_AGENT" 'approval_policy = "never"'
+assert_contains "$REVIEWER_AGENT" 'sandbox_mode = "read-only"'
+assert_contains "$REVIEWER_AGENT" 'approval_policy = "never"'
+assert_contains "$REVIEWER_AGENT" 'read-only'
+assert_contains "$REVIEWER_AGENT" 'findings first'
+assert_contains "$REVIEWER_AGENT" 'severity'
+assert_contains "$REVIEWER_AGENT" 'file and line evidence'
+assert_contains "$REVIEWER_AGENT" 'correctness, security, data integrity, and regression'
+assert_contains "$REVIEWER_AGENT" 'remaining test gaps'
+assert_contains "$REVIEWER_AGENT" 'Do not edit files'
 
 # Existing credentials are reused without re-prompting or replacement.
 state_sum=$(cksum "$STATE")
-agent_sum=$(cksum "$AGENT")
+general_agent_sum=$(cksum "$GENERAL_AGENT")
+developer_agent_sum=$(cksum "$DEVELOPER_AGENT")
+reviewer_agent_sum=$(cksum "$REVIEWER_AGENT")
 dialog_sum=$(cksum "$FAKE_DIALOG_SCRIPT_LOG")
 FAKE_DIALOG_VALUE='SECOND_SECRET_MUST_NOT_BE_USED'
 run_configure >"$CAPTURED/reconfigure.out" 2>"$CAPTURED/reconfigure.err"
 assert_equals "$state_sum" "$(cksum "$STATE")"
-assert_equals "$agent_sum" "$(cksum "$AGENT")"
+assert_equals "$general_agent_sum" "$(cksum "$GENERAL_AGENT")"
+assert_equals "$developer_agent_sum" "$(cksum "$DEVELOPER_AGENT")"
+assert_equals "$reviewer_agent_sum" "$(cksum "$REVIEWER_AGENT")"
 assert_equals "$dialog_sum" "$(cksum "$FAKE_DIALOG_SCRIPT_LOG")"
 assert_equals 1 "$(grep -F -c -- "add|$SERVICE|api-key" "$FAKE_LOG" || true)"
 
@@ -380,7 +517,9 @@ UPDATED_MODEL='ep-20250825-review-v2'
 run_configure "$ENDPOINT" "$UPDATED_MODEL" >"$CAPTURED/model-change.out" 2>"$CAPTURED/model-change.err"
 assert_contains "$STATE" "\"endpoint\": \"$ENDPOINT\""
 assert_contains "$STATE" "\"model\": \"$UPDATED_MODEL\""
-assert_contains "$AGENT" "model = \"$UPDATED_MODEL\""
+for profile_agent in "$GENERAL_AGENT" "$DEVELOPER_AGENT" "$REVIEWER_AGENT"; do
+  assert_contains "$profile_agent" "model = \"$UPDATED_MODEL\""
+done
 assert_equals "$dialog_sum" "$(cksum "$FAKE_DIALOG_SCRIPT_LOG")"
 assert_equals 1 "$(grep -F -c -- "add|$SERVICE|api-key" "$FAKE_LOG" || true)"
 
@@ -552,14 +691,18 @@ assert_contains "$DELETE_FAIL_LOG" "delete|$SERVICE|api-key"
 assert_contains "$CAPTURED/delete-fail.err" 'cleanup incomplete'
 assert_contains "$CAPTURED/delete-fail.err" "$SERVICE"
 
-# Reviewer uninstall preserves the DeepSeek agent, credential, state, and workflow.
+# Provider uninstall removes all Volcengine profiles and preserves DeepSeek.
 run_uninstall >"$CAPTURED/uninstall.out" 2>"$CAPTURED/uninstall.err"
-assert_not_file "$AGENT"
-assert_file "$DEEPSEEK_AGENT"
-assert_contains "$STATE" '"id": "deepseek-developer"'
-assert_not_contains "$STATE" '"id": "volcengine-reviewer"'
-assert_contains "$TEST_HOME/AGENTS.md" 'development agent type: deepseek_developer'
-assert_not_contains "$TEST_HOME/AGENTS.md" 'review agent type: volcengine_reviewer'
+assert_not_file "$GENERAL_AGENT"
+assert_not_file "$DEVELOPER_AGENT"
+assert_not_file "$REVIEWER_AGENT"
+assert_file "$DEEPSEEK_GENERAL_AGENT"
+assert_file "$DEEPSEEK_DEVELOPER_AGENT"
+assert_file "$DEEPSEEK_REVIEWER_AGENT"
+assert_contains "$STATE" '"id": "deepseek-agent"'
+assert_not_contains "$STATE" '"id": "volcengine-agent"'
+assert_contains "$TEST_HOME/AGENTS.md" 'provider deepseek agent types: deepseek_general, deepseek_developer, deepseek_reviewer.'
+assert_not_contains "$TEST_HOME/AGENTS.md" 'provider volcengine agent types:'
 assert_contains "$FAKE_STATE" "$DEEPSEEK_SERVICE|api-key"
 assert_not_contains "$FAKE_STATE" "$SERVICE|api-key"
 
@@ -657,21 +800,25 @@ run_uninstall >"$CAPTURED/uninstall-retry.out" 2>"$CAPTURED/uninstall-retry.err"
 assert_not_contains "$FAKE_STATE" "$SERVICE|api-key"
 FAKE_DIALOG_VALUE=reinstall-secret
 run_configure >"$CAPTURED/reinstall.out" 2>"$CAPTURED/reinstall.err"
-assert_file "$AGENT"
+assert_file "$GENERAL_AGENT"
+assert_file "$DEVELOPER_AGENT"
+assert_file "$REVIEWER_AGENT"
 run_uninstall >"$CAPTURED/final-uninstall.out" 2>"$CAPTURED/final-uninstall.err"
 run_uninstall >"$CAPTURED/idempotent-uninstall.out" 2>"$CAPTURED/idempotent-uninstall.err"
 
-SETUP_SKILL="$PLUGIN_ROOT/skills/volcengine-reviewer-setup/SKILL.md"
-UNINSTALL_SKILL="$PLUGIN_ROOT/skills/volcengine-reviewer-uninstall/SKILL.md"
+SETUP_SKILL="$PLUGIN_ROOT/skills/volcengine-agent-setup/SKILL.md"
+UNINSTALL_SKILL="$PLUGIN_ROOT/skills/volcengine-agent-uninstall/SKILL.md"
 assert_contains "$SETUP_SKILL" 'configuring or checking status'
 assert_contains "$SETUP_SKILL" 'scripts/vendor/lifecycle.sh" status'
-assert_contains "$SETUP_SKILL" "agent's ID, role, provider, endpoint, model"
+assert_contains "$SETUP_SKILL" "provider's ID, provider name, endpoint, model"
 assert_contains "$SETUP_SKILL" 'Do not call Keychain, configure, or uninstall.'
 assert_contains "$SETUP_SKILL" 'other restoration'
 assert_contains "$SETUP_SKILL" 'Do not accept, quote, retain, or reuse an API key pasted in chat.'
 assert_contains "$SETUP_SKILL" 'native hidden dialog'
 assert_contains "$SETUP_SKILL" 'explicit approval'
 assert_contains "$SETUP_SKILL" '`volcengine_reviewer`'
+assert_contains "$SETUP_SKILL" '`volcengine_general`'
+assert_contains "$SETUP_SKILL" '`volcengine_developer`'
 assert_contains "$SETUP_SKILL" '`model_provider` equal to `volcengine`'
 assert_contains "$SETUP_SKILL" '`multi_agent_version` equal to `v1`'
 assert_contains "$SETUP_SKILL" 'The user and Codex must not provide a key'
@@ -679,11 +826,15 @@ assert_contains "$SETUP_SKILL" "adapter's private pipe"
 assert_contains "$SETUP_SKILL" 'same endpoint'
 assert_contains "$SETUP_SKILL" 'changing only the model or deployment is'
 assert_contains "$SETUP_SKILL" "plugin's uninstall cleanup first"
-assert_contains "$UNINSTALL_SKILL" 'codex plugin remove volcengine-reviewer@custom-subagents'
-assert_contains "$UNINSTALL_SKILL" 'restore the same `volcengine-reviewer@custom-subagents` package'
+assert_contains "$SETUP_SKILL" 'general, developer, and reviewer'
+assert_contains "$SETUP_SKILL" 'automatic scheduling'
+assert_contains "$SETUP_SKILL" 'explicit provider or role'
+assert_contains "$SETUP_SKILL" '`codex-custom-subagent/volcengine-agent`'
+assert_contains "$UNINSTALL_SKILL" 'codex plugin remove volcengine-agent@custom-subagents'
+assert_contains "$UNINSTALL_SKILL" 'restore the same `volcengine-agent@custom-subagents` package'
 
 if grep -R -F -- "$SENTINEL" "$CAPTURED" "$FAKE_STATE" "$FAIL_STATE" "$DELETE_FAIL_STATE" "$TEST_HOME" "$FAIL_HOME" "$DELETE_FAIL_HOME" "$PLUGIN_ROOT" "$COPIED_PLUGIN" >/dev/null 2>&1; then
   fail 'secret sentinel appeared in plugin output or managed files'
 fi
 
-printf '%s\n' 'PASS: Volcengine reviewer plugin'
+printf '%s\n' 'PASS: Volcengine provider plugin'

@@ -19,9 +19,9 @@ variable, or a file.
   the pre-configuration restoration baseline.
 - Fully quit Codex Desktop before beginning configuration.
 
-## Configure DeepSeek Developer
+## Configure DeepSeek Provider
 
-1. Start Codex and ask it to use the `deepseek-developer-setup` skill with the
+1. Start Codex and ask it to use the `deepseek-agent-setup` skill with the
    selected non-secret model and either the accepted default endpoint
    `https://api.deepseek.com` or an explicit non-secret endpoint.
 2. Confirm that Codex shows the endpoint and model and asks for approval before
@@ -33,16 +33,19 @@ variable, or a file.
 5. Fully quit and restart Codex Desktop. Create a new task; do not reuse the
    setup task.
 
-## DeepSeek Development Route
+## DeepSeek Automatic And Explicit Routes
 
 In the fresh task, request a small, disposable development change and allow the
 normal custom-agent route. Confirm the GPT model selected in the UI remains the
 main agent and the delegated implementation is returned to that same task.
+Then request an independent review and confirm a separate DeepSeek reviewer
+child receives the actual diff and verification evidence.
 
 Inspect the task JSONL without printing authentication-bearing command data.
-Require one child record with all of the following exact evidence:
+Require two child records with all of the following exact evidence:
 
-- `agent_role` or `agent_type`: `deepseek_developer`
+- `agent_role` or `agent_type`: `deepseek_developer` for development and
+  `deepseek_reviewer` for review
 - `model_provider`: `deepseek`
 - model: the exact configured DeepSeek model
 - `multi_agent_version`: `v1`
@@ -51,21 +54,22 @@ Require one child record with all of the following exact evidence:
 Reject the run if the JSONL shows V2, an incomplete payload, a different
 provider/model, or a detached main task that cannot receive the child result.
 
-## Configure And Exercise Volcengine Reviewer
+## Configure And Exercise Volcengine Provider
 
 1. In a separate setup conversation, ask Codex to use the
-   `volcengine-reviewer-setup` skill with the exact non-secret OpenAI-compatible
+   `volcengine-agent-setup` skill with the exact non-secret OpenAI-compatible
    endpoint and model or deployment ID. No default may be guessed.
 2. Confirm the proposed values and approve the managed-file change. Enter a
    fresh key only in the native hidden dialog.
 3. Fully quit and restart Codex Desktop, then create a new task.
 4. Before the task, inspect the generated `volcengine_reviewer.toml` and
    confirm it contains `sandbox_mode = "read-only"` and
-   `approval_policy = "never"`. Confirm the DeepSeek agent TOML does not gain
-   those reviewer-only settings.
-5. Give the task original requirements and acceptance criteria, make a small
-   testable change through the DeepSeek development route, and request an
-   independent review of the actual diff and verification evidence.
+   `approval_policy = "never"`. Confirm `volcengine_general.toml`,
+   `volcengine_developer.toml`, and all non-reviewer DeepSeek profiles do not
+   gain those reviewer-only settings.
+5. Give the task original requirements and acceptance criteria, then explicitly
+   request DeepSeek development followed by Volcengine review of the actual
+   diff and verification evidence.
 6. Confirm review output is findings-first, includes severity and file/line
    evidence, checks correctness, security, data integrity, regressions and test
    gaps, and that the reviewer cannot edit files or request approval to escape
@@ -84,12 +88,15 @@ Require the reviewer child JSONL to contain:
 
 Use a new task for each routing case. A single task must never mix V1 and V2.
 
-1. Ask explicitly for "official GPT agents" on a bounded task. Confirm the
+1. Explicitly request DeepSeek review and Volcengine development, then confirm
+   those exact provider/role profiles are selected rather than the automatic
+   choice.
+2. Ask explicitly for "official GPT agents" on a bounded task. Confirm the
    child uses an official `default`, `worker`, or `explorer` role in the same V1
    task, and that neither `deepseek_developer` nor `volcengine_reviewer` runs.
-2. Ask explicitly for "no subagents" on a bounded task. Confirm the GPT main
+3. Ask explicitly for "no subagents" on a bounded task. Confirm the GPT main
    task performs the work and the JSONL has no child-agent dispatch.
-3. Start one more task without an override. Confirm configured custom-agent
+4. Start one more task without an override. Confirm configured custom-agent
    routing resumes and still uses V1 throughout.
 
 ## Optional Live Provider Calls
@@ -103,15 +110,15 @@ status, model/provider identifiers, and non-secret error details.
 ## Uninstall And Restoration
 
 1. While both packages are still installed, ask Codex to use the
-   `deepseek-developer-uninstall` skill. Approve deletion of only its managed
-   files and Keychain item. Confirm the Volcengine agent, route, and Keychain
+   `deepseek-agent-uninstall` skill. Approve deletion of only its three managed
+   profile files and Keychain item. Confirm the Volcengine profiles, route, and Keychain
    item remain. Only after cleanup succeeds, remove
-   `deepseek-developer@custom-subagents`.
+   `deepseek-agent@custom-subagents`.
 2. Fully restart Codex and confirm Volcengine review routing still works in a
    fresh task.
-3. Ask Codex to use the `volcengine-reviewer-uninstall` skill. Approve deletion
+3. Ask Codex to use the `volcengine-agent-uninstall` skill. Approve deletion
    of only its managed files and Keychain item. Only after cleanup succeeds,
-   remove `volcengine-reviewer@custom-subagents`.
+   remove `volcengine-agent@custom-subagents`.
 4. Confirm both exact Keychain services with account `api-key` are absent using
    identifier-only lookups; never use `security ... -w` or export Keychain
    data.

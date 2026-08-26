@@ -18,7 +18,7 @@ validate_json() {
 
 validate_json "$MARKETPLACE"
 
-for plugin_name in deepseek-developer volcengine-reviewer; do
+for plugin_name in deepseek-agent volcengine-agent; do
   plugin_root="$ROOT/plugins/$plugin_name"
   manifest="$plugin_root/.codex-plugin/plugin.json"
 

@@ -20,9 +20,9 @@ cleanup() {
 }
 trap cleanup EXIT HUP INT TERM
 
-PLUGIN_ROOT="$TEMP_ROOT/deepseek-developer"
+PLUGIN_ROOT="$TEMP_ROOT/deepseek-agent"
 mkdir -p "$PLUGIN_ROOT/.codex-plugin"
-cp "$ROOT/plugins/deepseek-developer/.codex-plugin/plugin.json" "$PLUGIN_ROOT/.codex-plugin/plugin.json"
+cp "$ROOT/plugins/deepseek-agent/.codex-plugin/plugin.json" "$PLUGIN_ROOT/.codex-plugin/plugin.json"
 cp "$ROOT/tests/fixtures/agent-spec.json" "$PLUGIN_ROOT/agent-spec.json"
 
 new_case() {
@@ -79,7 +79,7 @@ start_lifecycle() {
     CUSTOM_SUBAGENT_ALLOW_HTTP=1 \
     UUIDGEN_GATE="${UUIDGEN_GATE-}" \
     LIFECYCLE_SIGNAL_GATE="${LIFECYCLE_SIGNAL_GATE-}" \
-    /bin/sh "$TEST_SHARED/lifecycle.sh" install deepseek-developer development deepseek \
+    /bin/sh "$TEST_SHARED/lifecycle.sh" install deepseek-agent deepseek \
       http://localhost:11434 fixture-model >"$CASE_ROOT/lifecycle.out" 2>"$CASE_ROOT/lifecycle.err" &
   LIFECYCLE_PID=$!
   wait_for_gate
@@ -112,7 +112,9 @@ terminate_lifecycle
 assert_same_file "$CASE_ROOT/config.before" "$TEST_HOME/config.toml"
 assert_not_file "$TEST_HOME/custom-subagents/state.json"
 assert_not_file "$TEST_HOME/custom-subagents/models-v1.json"
+assert_not_file "$TEST_HOME/agents/deepseek_general.toml"
 assert_not_file "$TEST_HOME/agents/deepseek_developer.toml"
+assert_not_file "$TEST_HOME/agents/deepseek_reviewer.toml"
 assert_not_file "$TEST_HOME/AGENTS.md"
 
 printf '%s\n' 'PASS: lifecycle signals'

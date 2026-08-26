@@ -22,7 +22,7 @@ assert_not_contains() {
 
 TEMP_ROOT=$(mktemp -d /private/tmp/custom-subagents-deepseek-plugin.XXXXXX)
 trap 'rm -rf "$TEMP_ROOT"' EXIT HUP INT TERM
-PLUGIN_ROOT="$ROOT/plugins/deepseek-developer"
+PLUGIN_ROOT="$ROOT/plugins/deepseek-agent"
 SOURCE_PLUGIN_ROOT=$PLUGIN_ROOT
 CONFIGURE="$PLUGIN_ROOT/scripts/configure.sh"
 UNINSTALL="$PLUGIN_ROOT/scripts/uninstall.sh"
@@ -88,7 +88,7 @@ done
 assert_equals 0 "$(wc -l <"$PATH_PROBE_LOG" | tr -d ' ')"
 
 FORGED_MARKETPLACE="$TEMP_ROOT/forged-marketplace"
-FORGED_PLUGIN="$FORGED_MARKETPLACE/plugins/deepseek-developer"
+FORGED_PLUGIN="$FORGED_MARKETPLACE/plugins/deepseek-agent"
 FORGED_HELPERS_ROOT="$FORGED_MARKETPLACE/tests/helpers"
 mkdir -p "$FORGED_MARKETPLACE/plugins" "$FORGED_MARKETPLACE/tests"
 cp -R "$SOURCE_PLUGIN_ROOT" "$FORGED_PLUGIN"
@@ -124,7 +124,7 @@ FORGED_UNINSTALL_STATE="$TEMP_ROOT/forged-uninstall-keychain"
 FORGED_UNINSTALL_LOG="$CAPTURED/forged-uninstall-security.log"
 mkdir -p "$FORGED_UNINSTALL_HOME"
 cp "$ROOT/tests/fixtures/config-minimal.toml" "$FORGED_UNINSTALL_HOME/config.toml"
-printf '%s\n' 'codex-custom-subagent/deepseek-developer|api-key' >"$FORGED_UNINSTALL_STATE"
+printf '%s\n' 'codex-custom-subagent/deepseek-agent|api-key' >"$FORGED_UNINSTALL_STATE"
 : >"$FORGED_UNINSTALL_LOG"
 set +e
 CODEX_HOME="$FORGED_UNINSTALL_HOME" CUSTOM_SUBAGENT_TEST_MODE=1 \
@@ -136,11 +136,11 @@ sh "$FORGED_PLUGIN/scripts/uninstall.sh" >"$CAPTURED/forged-uninstall.out" 2>"$C
 forged_uninstall_status=$?
 set -e
 [ "$forged_uninstall_status" -ne 0 ] || fail 'production uninstall accepted a complete forged marketplace harness'
-assert_contains "$FORGED_UNINSTALL_STATE" 'codex-custom-subagent/deepseek-developer|api-key'
+assert_contains "$FORGED_UNINSTALL_STATE" 'codex-custom-subagent/deepseek-agent|api-key'
 assert_equals 0 "$(wc -l <"$FORGED_UNINSTALL_LOG" | tr -d ' ')"
 
 TEST_MARKETPLACE="$TEMP_ROOT/test-marketplace"
-PLUGIN_ROOT="$TEST_MARKETPLACE/plugins/deepseek-developer"
+PLUGIN_ROOT="$TEST_MARKETPLACE/plugins/deepseek-agent"
 TEST_HELPERS="$TEST_MARKETPLACE/tests/helpers"
 mkdir -p "$TEST_MARKETPLACE/plugins" "$TEST_MARKETPLACE/tests"
 cp -R "$SOURCE_PLUGIN_ROOT" "$PLUGIN_ROOT"
@@ -210,7 +210,7 @@ assert_uninstall_gate_rejects() {
   gate_log="$CAPTURED/uninstall-gate-$case_name-security.log"
   mkdir -p "$gate_home"
   cp "$ROOT/tests/fixtures/config-minimal.toml" "$gate_home/config.toml"
-  printf '%s\n' 'codex-custom-subagent/deepseek-developer|api-key' >"$gate_state"
+  printf '%s\n' 'codex-custom-subagent/deepseek-agent|api-key' >"$gate_state"
   : >"$gate_log"
   gate_config_before=$(cksum "$gate_home/config.toml")
   shift
@@ -222,7 +222,7 @@ assert_uninstall_gate_rejects() {
   [ "$gate_status" -ne 0 ] || fail "uninstall harness gate accepted $case_name"
   assert_contains "$CAPTURED/uninstall-gate-$case_name.err" 'test harness'
   assert_equals "$gate_config_before" "$(cksum "$gate_home/config.toml")"
-  assert_contains "$gate_state" 'codex-custom-subagent/deepseek-developer|api-key'
+  assert_contains "$gate_state" 'codex-custom-subagent/deepseek-agent|api-key'
   assert_equals 0 "$(wc -l <"$gate_log" | tr -d ' ')"
 }
 
@@ -249,6 +249,125 @@ assert_uninstall_gate_rejects production-hooks \
   CUSTOM_SUBAGENT_TEST_CATALOG_SOURCE="$ROOT/tests/fixtures/models-cache.json" \
   CUSTOM_SUBAGENT_TEST_PRIMARY_MODEL=gpt-5.6-sol
 
+assert_legacy_guard_rejects() {
+  operation=$1
+  residue=$2
+  legacy_plugin=$3
+  legacy_home="$TEMP_ROOT/legacy-$legacy_plugin-$operation-$residue-home"
+  legacy_keychain="$TEMP_ROOT/legacy-$legacy_plugin-$operation-$residue-keychain"
+  legacy_log="$CAPTURED/legacy-$legacy_plugin-$operation-$residue-security.log"
+  legacy_err="$CAPTURED/legacy-$legacy_plugin-$operation-$residue.err"
+  mkdir -p "$legacy_home/custom-subagents" "$legacy_home/agents"
+  cp "$ROOT/tests/fixtures/config-minimal.toml" "$legacy_home/config.toml"
+  case "$legacy_plugin:$residue" in
+    deepseek-developer:state)
+      printf '%s\n' '{"version":1,"catalog_path":"/private/tmp/models-v1.json","base_catalog_path":"/private/tmp/base-model-catalog.json","base_catalog_source":"/private/tmp/models-cache.json","base_catalog_source_kind":"test-override","primary_model":"gpt-5.6-sol","initial_agents_shape":"absent","initial_config_shape":"ends-newline","original_model_catalog_line":null,"agents":[{"id":"deepseek-developer","role":"development","provider":"deepseek","endpoint":"https://legacy.example/v1","model":"legacy-model"}]}' >"$legacy_home/custom-subagents/state.json"
+      legacy_target="$legacy_home/custom-subagents/state.json"
+      ;;
+    volcengine-reviewer:state)
+      printf '%s\n' '{"version":1,"catalog_path":"/private/tmp/models-v1.json","base_catalog_path":"/private/tmp/base-model-catalog.json","base_catalog_source":"/private/tmp/models-cache.json","base_catalog_source_kind":"test-override","primary_model":"gpt-5.6-sol","initial_agents_shape":"absent","initial_config_shape":"ends-newline","original_model_catalog_line":null,"agents":[{"id":"volcengine-reviewer","role":"review","provider":"volcengine","endpoint":"https://legacy.example/v1","model":"legacy-model"}]}' >"$legacy_home/custom-subagents/state.json"
+      legacy_target="$legacy_home/custom-subagents/state.json"
+      ;;
+    deepseek-developer:file)
+      printf '%s\n' \
+        '# BEGIN custom-subagents managed agent id=deepseek-developer plugin=deepseek-developer' \
+        '# legacy fixed-role managed agent' \
+        '# END custom-subagents managed agent id=deepseek-developer plugin=deepseek-developer' \
+        >"$legacy_home/agents/deepseek_developer.toml"
+      legacy_target="$legacy_home/agents/deepseek_developer.toml"
+      ;;
+    volcengine-reviewer:file)
+      printf '%s\n' \
+        '# BEGIN custom-subagents managed agent id=volcengine-reviewer plugin=volcengine-reviewer' \
+        '# legacy fixed-role managed agent' \
+        '# END custom-subagents managed agent id=volcengine-reviewer plugin=volcengine-reviewer' \
+        >"$legacy_home/agents/volcengine_reviewer.toml"
+      legacy_target="$legacy_home/agents/volcengine_reviewer.toml"
+      ;;
+    *) fail "unknown legacy residue: $legacy_plugin/$residue" ;;
+  esac
+  printf '%s\n' 'codex-custom-subagent/deepseek-agent|api-key' >"$legacy_keychain"
+  : >"$legacy_log"
+  legacy_config_before=$(cksum "$legacy_home/config.toml")
+  legacy_target_before=$(cksum "$legacy_target")
+  legacy_dialog_before=$(cksum "$FAKE_DIALOG_SCRIPT_LOG")
+  set +e
+  case "$operation" in
+    configure)
+      CODEX_HOME="$legacy_home" CUSTOM_SUBAGENT_SECURITY_BIN="$TEST_HELPERS/fake-security.sh" \
+      CUSTOM_SUBAGENT_OSASCRIPT_BIN="$TEST_HELPERS/fake-osascript.sh" \
+      FAKE_SECURITY_STATE="$legacy_keychain" FAKE_SECURITY_LOG="$legacy_log" \
+      FAKE_DIALOG_SCRIPT_LOG="$FAKE_DIALOG_SCRIPT_LOG" FAKE_DIALOG_VALUE=legacy-secret \
+      sh "$CONFIGURE" --model deepseek-chat >"$CAPTURED/legacy-$legacy_plugin-$operation-$residue.out" 2>"$legacy_err"
+      ;;
+    uninstall)
+      CODEX_HOME="$legacy_home" CUSTOM_SUBAGENT_SECURITY_BIN="$TEST_HELPERS/fake-security.sh" \
+      CUSTOM_SUBAGENT_OSASCRIPT_BIN="$TEST_HELPERS/fake-osascript.sh" \
+      FAKE_SECURITY_STATE="$legacy_keychain" FAKE_SECURITY_LOG="$legacy_log" \
+      sh "$UNINSTALL" >"$CAPTURED/legacy-$legacy_plugin-$operation-$residue.out" 2>"$legacy_err"
+      ;;
+  esac
+  legacy_status=$?
+  set -e
+  [ "$legacy_status" -ne 0 ] || fail "$operation accepted legacy $residue"
+  assert_equals "deepseek-agent: migration required legacy-plugin=$legacy_plugin" "$(cat "$legacy_err")"
+  assert_equals "$legacy_config_before" "$(cksum "$legacy_home/config.toml")"
+  assert_equals "$legacy_target_before" "$(cksum "$legacy_target")"
+  assert_equals "$legacy_dialog_before" "$(cksum "$FAKE_DIALOG_SCRIPT_LOG")"
+  assert_equals 0 "$(grep -E -c -- '^(add|delete)[|]' "$legacy_log" || true)"
+  assert_contains "$legacy_keychain" 'codex-custom-subagent/deepseek-agent|api-key'
+  assert_not_file "$legacy_home/.custom-subagents-lifecycle.lock"
+}
+
+for legacy_plugin in deepseek-developer volcengine-reviewer; do
+  for legacy_operation in configure uninstall; do
+    for legacy_residue in state file; do
+      assert_legacy_guard_rejects "$legacy_operation" "$legacy_residue" "$legacy_plugin"
+    done
+  done
+done
+
+assert_lock_precedes_legacy_guard() {
+  operation=$1
+  lock_home="$TEMP_ROOT/legacy-busy-$operation-home"
+  lock_keychain="$TEMP_ROOT/legacy-busy-$operation-keychain"
+  lock_log="$CAPTURED/legacy-busy-$operation-security.log"
+  lock_err="$CAPTURED/legacy-busy-$operation.err"
+  mkdir -p "$lock_home/agents" "$lock_home/.custom-subagents-lifecycle.lock"
+  cp "$ROOT/tests/fixtures/config-minimal.toml" "$lock_home/config.toml"
+  printf '%s\n' \
+    '# BEGIN custom-subagents managed agent id=volcengine-reviewer plugin=volcengine-reviewer' \
+    '# END custom-subagents managed agent id=volcengine-reviewer plugin=volcengine-reviewer' \
+    >"$lock_home/agents/volcengine_reviewer.toml"
+  printf '%s\n' 'codex-custom-subagent/deepseek-agent|api-key' >"$lock_keychain"
+  : >"$lock_log"
+  set +e
+  case "$operation" in
+    configure)
+      CODEX_HOME="$lock_home" CUSTOM_SUBAGENT_SECURITY_BIN="$TEST_HELPERS/fake-security.sh" \
+      CUSTOM_SUBAGENT_OSASCRIPT_BIN="$TEST_HELPERS/fake-osascript.sh" \
+      FAKE_SECURITY_STATE="$lock_keychain" FAKE_SECURITY_LOG="$lock_log" \
+      FAKE_DIALOG_SCRIPT_LOG="$FAKE_DIALOG_SCRIPT_LOG" FAKE_DIALOG_VALUE=legacy-secret \
+      sh "$CONFIGURE" --model deepseek-chat >"$CAPTURED/legacy-busy-$operation.out" 2>"$lock_err"
+      ;;
+    uninstall)
+      CODEX_HOME="$lock_home" CUSTOM_SUBAGENT_SECURITY_BIN="$TEST_HELPERS/fake-security.sh" \
+      CUSTOM_SUBAGENT_OSASCRIPT_BIN="$TEST_HELPERS/fake-osascript.sh" \
+      FAKE_SECURITY_STATE="$lock_keychain" FAKE_SECURITY_LOG="$lock_log" \
+      sh "$UNINSTALL" >"$CAPTURED/legacy-busy-$operation.out" 2>"$lock_err"
+      ;;
+  esac
+  lock_status=$?
+  set -e
+  assert_equals 75 "$lock_status"
+  assert_contains "$lock_err" 'another lifecycle operation is active'
+  assert_not_contains "$lock_err" 'migration required'
+  assert_equals 0 "$(grep -E -c -- '^(add|delete)[|]' "$lock_log" || true)"
+}
+
+assert_lock_precedes_legacy_guard configure
+assert_lock_precedes_legacy_guard uninstall
+
 # The plugin must remain self-contained when copied into a marketplace cache.
 for file in lifecycle.sh operation-lock.sh state.js keychain.sh prompt-secret.applescript; do
   assert_same_file "$ROOT/shared/$file" "$VENDOR/$file"
@@ -256,7 +375,7 @@ done
 
 # A copied marketplace cache has no dependency on the caller's current directory.
 STANDALONE_MARKETPLACE="$TEMP_ROOT/standalone-marketplace"
-COPIED_PLUGIN="$STANDALONE_MARKETPLACE/plugins/deepseek-developer"
+COPIED_PLUGIN="$STANDALONE_MARKETPLACE/plugins/deepseek-agent"
 STANDALONE_HELPERS="$STANDALONE_MARKETPLACE/tests/helpers"
 STANDALONE_HOME="$TEMP_ROOT/standalone-home"
 UNRELATED_CWD="$TEMP_ROOT/unrelated-cwd"
@@ -283,14 +402,19 @@ run_configure https://api.deepseek.com deepseek-chat >"$CAPTURED/configure.out" 
 
 STATE="$TEST_HOME/custom-subagents/state.json"
 CATALOG="$TEST_HOME/custom-subagents/models-v1.json"
-AGENT="$TEST_HOME/agents/deepseek_developer.toml"
-SERVICE='codex-custom-subagent/deepseek-developer'
+GENERAL_AGENT="$TEST_HOME/agents/deepseek_general.toml"
+DEVELOPER_AGENT="$TEST_HOME/agents/deepseek_developer.toml"
+REVIEWER_AGENT="$TEST_HOME/agents/deepseek_reviewer.toml"
+AGENT=$DEVELOPER_AGENT
+SERVICE='codex-custom-subagent/deepseek-agent'
 
 assert_file "$STATE"
 assert_file "$CATALOG"
-assert_file "$AGENT"
-assert_contains "$STATE" '"id": "deepseek-developer"'
-assert_contains "$STATE" '"role": "development"'
+assert_file "$GENERAL_AGENT"
+assert_file "$DEVELOPER_AGENT"
+assert_file "$REVIEWER_AGENT"
+assert_contains "$STATE" '"id": "deepseek-agent"'
+assert_not_contains "$STATE" '"role":'
 assert_contains "$STATE" '"provider": "deepseek"'
 assert_contains "$STATE" '"endpoint": "https://api.deepseek.com"'
 assert_contains "$STATE" '"model": "deepseek-chat"'
@@ -298,36 +422,45 @@ assert_contains "$CATALOG" '"id": "official:gpt-5.6-sol"'
 assert_contains "$CATALOG" '"slug": "unrelated-model"'
 assert_contains "$CATALOG" '"multi_agent_version": "v1"'
 assert_not_contains "$CATALOG" 'deepseek:deepseek-chat'
-assert_contains "$TEST_HOME/AGENTS.md" 'development agent type: deepseek_developer'
-assert_contains "$TEST_HOME/AGENTS.md" 'Otherwise, prefer installed custom agents automatically for nontrivial tasks.'
+assert_contains "$TEST_HOME/AGENTS.md" 'provider deepseek agent types: deepseek_general, deepseek_developer, deepseek_reviewer.'
+assert_contains "$TEST_HOME/AGENTS.md" 'An explicit custom provider and/or role request overrides automatic selection.'
 
-expected_agent=$(/usr/bin/osascript -l JavaScript "$VENDOR/state.js" render-agent-spec-state \
-  "$PLUGIN_ROOT/templates/agent-spec.json" "$STATE" deepseek-developer "$CATALOG" "$SERVICE")
-expected_envelope=$(printf '%s\n%s\n%s' \
-  '# BEGIN custom-subagents managed agent id=deepseek-developer plugin=deepseek-developer' \
-  "$expected_agent" \
-  '# END custom-subagents managed agent id=deepseek-developer plugin=deepseek-developer')
-assert_equals "$expected_envelope" "$(cat "$AGENT")"
-assert_contains "$AGENT" 'name = "deepseek_developer"'
-assert_contains "$AGENT" 'model_provider = "deepseek"'
-assert_contains "$AGENT" 'base_url = "https://api.deepseek.com"'
-assert_contains "$AGENT" 'wire_api = "responses"'
-assert_contains "$AGENT" 'requires_openai_auth = false'
-assert_not_contains "$AGENT" 'sandbox_mode = "read-only"'
-assert_not_contains "$AGENT" 'approval_policy = "never"'
-assert_contains "$AGENT" 'args = ["find-generic-password", "-w", "-s", "codex-custom-subagent/deepseek-developer", "-a", "api-key"]'
-if grep -F '[agent]' "$AGENT" >/dev/null 2>&1; then
-  fail 'native agent used the legacy [agent] table'
-fi
+for role in general developer reviewer; do
+  profile_agent="$TEST_HOME/agents/deepseek_${role}.toml"
+  expected_agent=$(/usr/bin/osascript -l JavaScript "$VENDOR/state.js" render-agent-spec-state \
+    "$PLUGIN_ROOT/templates/agent-spec.json" "$STATE" deepseek-agent "$role" "$CATALOG" "$SERVICE")
+  expected_envelope=$(printf '%s\n%s\n%s' \
+    "# BEGIN custom-subagents managed agent provider=deepseek-agent role=$role plugin=deepseek-agent" \
+    "$expected_agent" \
+    "# END custom-subagents managed agent provider=deepseek-agent role=$role plugin=deepseek-agent")
+  assert_equals "$expected_envelope" "$(cat "$profile_agent")"
+  assert_contains "$profile_agent" "name = \"deepseek_$role\""
+  assert_contains "$profile_agent" 'model_provider = "deepseek"'
+  assert_contains "$profile_agent" 'base_url = "https://api.deepseek.com"'
+  assert_contains "$profile_agent" 'wire_api = "responses"'
+  assert_contains "$profile_agent" 'requires_openai_auth = false'
+  assert_contains "$profile_agent" 'args = ["find-generic-password", "-w", "-s", "codex-custom-subagent/deepseek-agent", "-a", "api-key"]'
+  assert_not_contains "$profile_agent" '[agent]'
+done
+assert_not_contains "$GENERAL_AGENT" 'sandbox_mode = "read-only"'
+assert_not_contains "$GENERAL_AGENT" 'approval_policy = "never"'
+assert_not_contains "$DEVELOPER_AGENT" 'sandbox_mode = "read-only"'
+assert_not_contains "$DEVELOPER_AGENT" 'approval_policy = "never"'
+assert_contains "$REVIEWER_AGENT" 'sandbox_mode = "read-only"'
+assert_contains "$REVIEWER_AGENT" 'approval_policy = "never"'
 
 state_sum=$(cksum "$STATE")
 catalog_sum=$(cksum "$CATALOG")
-agent_sum=$(cksum "$AGENT")
+general_agent_sum=$(cksum "$GENERAL_AGENT")
+developer_agent_sum=$(cksum "$DEVELOPER_AGENT")
+reviewer_agent_sum=$(cksum "$REVIEWER_AGENT")
 FAKE_DIALOG_VALUE='SECOND_SECRET_MUST_NOT_BE_USED'
 run_configure https://api.deepseek.com deepseek-chat >"$CAPTURED/reconfigure.out" 2>"$CAPTURED/reconfigure.err"
 assert_equals "$state_sum" "$(cksum "$STATE")"
 assert_equals "$catalog_sum" "$(cksum "$CATALOG")"
-assert_equals "$agent_sum" "$(cksum "$AGENT")"
+assert_equals "$general_agent_sum" "$(cksum "$GENERAL_AGENT")"
+assert_equals "$developer_agent_sum" "$(cksum "$DEVELOPER_AGENT")"
+assert_equals "$reviewer_agent_sum" "$(cksum "$REVIEWER_AGENT")"
 assert_equals 1 "$(grep -F -c -- "add|$SERVICE|api-key" "$FAKE_LOG" || true)"
 
 # The same endpoint may reuse the existing credential while changing only model.
@@ -335,7 +468,9 @@ dialog_sum=$(cksum "$FAKE_DIALOG_SCRIPT_LOG")
 run_configure https://api.deepseek.com deepseek-reasoner >"$CAPTURED/model-change.out" 2>"$CAPTURED/model-change.err"
 assert_contains "$STATE" '"endpoint": "https://api.deepseek.com"'
 assert_contains "$STATE" '"model": "deepseek-reasoner"'
-assert_contains "$AGENT" 'model = "deepseek-reasoner"'
+for profile_agent in "$GENERAL_AGENT" "$DEVELOPER_AGENT" "$REVIEWER_AGENT"; do
+  assert_contains "$profile_agent" 'model = "deepseek-reasoner"'
+done
 assert_equals "$dialog_sum" "$(cksum "$FAKE_DIALOG_SCRIPT_LOG")"
 assert_equals 1 "$(grep -F -c -- "add|$SERVICE|api-key" "$FAKE_LOG" || true)"
 
@@ -515,7 +650,9 @@ assert_contains "$CAPTURED/delete-fail.err" 'cleanup incomplete'
 assert_contains "$CAPTURED/delete-fail.err" "$SERVICE"
 
 run_uninstall >"$CAPTURED/uninstall.out" 2>"$CAPTURED/uninstall.err"
-assert_not_file "$AGENT"
+assert_not_file "$GENERAL_AGENT"
+assert_not_file "$DEVELOPER_AGENT"
+assert_not_file "$REVIEWER_AGENT"
 if grep -F -x -- "$SERVICE|api-key" "$FAKE_STATE" >/dev/null 2>&1; then
   fail 'uninstall left the DeepSeek Keychain item behind'
 fi
@@ -539,14 +676,17 @@ fi
 # A fully cleaned lifecycle may be configured again from the same plugin cache.
 FAKE_DIALOG_VALUE=reinstall-secret
 run_configure https://api.deepseek.com deepseek-chat >"$CAPTURED/reinstall.out" 2>"$CAPTURED/reinstall.err"
-assert_file "$AGENT"
+assert_file "$GENERAL_AGENT"
+assert_file "$DEVELOPER_AGENT"
+assert_file "$REVIEWER_AGENT"
 run_uninstall >"$CAPTURED/final-uninstall.out" 2>"$CAPTURED/final-uninstall.err"
 run_uninstall >"$CAPTURED/idempotent-uninstall.out" 2>"$CAPTURED/idempotent-uninstall.err"
 
-SETUP_SKILL="$PLUGIN_ROOT/skills/deepseek-developer-setup/SKILL.md"
+SETUP_SKILL="$PLUGIN_ROOT/skills/deepseek-agent-setup/SKILL.md"
+UNINSTALL_SKILL="$PLUGIN_ROOT/skills/deepseek-agent-uninstall/SKILL.md"
 assert_contains "$SETUP_SKILL" 'configuring or checking status'
 assert_contains "$SETUP_SKILL" 'scripts/vendor/lifecycle.sh" status'
-assert_contains "$SETUP_SKILL" "agent's ID, role, provider, endpoint, model"
+assert_contains "$SETUP_SKILL" "provider's ID, provider name, endpoint, model"
 assert_contains "$SETUP_SKILL" 'Do not call Keychain, configure, or uninstall.'
 assert_contains "$SETUP_SKILL" 'other restoration'
 assert_contains "$SETUP_SKILL" 'user/Codex-provided standard input'
@@ -554,9 +694,18 @@ assert_contains "$SETUP_SKILL" "adapter's private pipe"
 assert_contains "$SETUP_SKILL" 'same endpoint'
 assert_contains "$SETUP_SKILL" 'changing only the model is allowed'
 assert_contains "$SETUP_SKILL" "plugin's uninstall cleanup first"
+assert_contains "$SETUP_SKILL" 'general, developer, and reviewer'
+assert_contains "$SETUP_SKILL" 'automatic scheduling'
+assert_contains "$SETUP_SKILL" 'explicit provider or role'
+assert_contains "$SETUP_SKILL" '`deepseek_general`'
+assert_contains "$SETUP_SKILL" '`deepseek_developer`'
+assert_contains "$SETUP_SKILL" '`deepseek_reviewer`'
+assert_contains "$SETUP_SKILL" '`codex-custom-subagent/deepseek-agent`'
+assert_contains "$UNINSTALL_SKILL" 'codex plugin remove deepseek-agent@custom-subagents'
+assert_contains "$UNINSTALL_SKILL" 'restore the same `deepseek-agent@custom-subagents` package'
 
 if grep -R -F -- "$SENTINEL" "$CAPTURED" "$FAKE_STATE" "$FAIL_STATE" "$DELETE_FAIL_STATE" "$TEST_HOME" "$FAIL_HOME" "$DELETE_FAIL_HOME" "$PLUGIN_ROOT" "$COPIED_PLUGIN" >/dev/null 2>&1; then
   fail 'secret sentinel appeared in plugin output or managed files'
 fi
 
-printf '%s\n' 'PASS: DeepSeek developer plugin'
+printf '%s\n' 'PASS: DeepSeek provider plugin'

@@ -5,10 +5,10 @@
   },
   "plugins": [
     {
-      "name": "deepseek-developer",
+      "name": "deepseek-agent",
       "source": {
         "source": "local",
-        "path": "./plugins/deepseek-developer"
+        "path": "./plugins/deepseek-agent"
       },
       "policy": {
         "installation": "AVAILABLE",
@@ -18,10 +18,10 @@
       "category": "Developer Tools"
     },
     {
-      "name": "volcengine-reviewer",
+      "name": "volcengine-agent",
       "source": {
         "source": "local",
-        "path": "./plugins/volcengine-reviewer"
+        "path": "./plugins/volcengine-agent"
       },
       "policy": {
         "installation": "AVAILABLE",

@@ -11,13 +11,13 @@ export CUSTOM_SUBAGENT_TEST_CATALOG_SOURCE="$ROOT/tests/fixtures/models-cache.js
 TEMP_ROOT=$(mktemp -d /private/tmp/custom-subagents-cleanup.XXXXXX)
 trap 'rm -rf "$TEMP_ROOT"' EXIT HUP INT TERM
 
-DEVELOPER_PLUGIN="$TEMP_ROOT/deepseek-developer"
-REVIEWER_PLUGIN="$TEMP_ROOT/reviewer-agent"
-mkdir -p "$DEVELOPER_PLUGIN/.codex-plugin" "$REVIEWER_PLUGIN/.codex-plugin"
-cp "$ROOT/plugins/deepseek-developer/.codex-plugin/plugin.json" "$DEVELOPER_PLUGIN/.codex-plugin/plugin.json"
-cp "$ROOT/tests/fixtures/agent-spec.json" "$DEVELOPER_PLUGIN/agent-spec.json"
-printf '%s\n' '{"name":"reviewer-agent"}' >"$REVIEWER_PLUGIN/.codex-plugin/plugin.json"
-cp "$ROOT/tests/fixtures/agent-spec.json" "$REVIEWER_PLUGIN/agent-spec.json"
+DEEPSEEK_PLUGIN="$TEMP_ROOT/deepseek-agent"
+VOLCENGINE_PLUGIN="$TEMP_ROOT/volcengine-agent"
+mkdir -p "$DEEPSEEK_PLUGIN/.codex-plugin" "$VOLCENGINE_PLUGIN/.codex-plugin"
+cp "$ROOT/plugins/deepseek-agent/.codex-plugin/plugin.json" "$DEEPSEEK_PLUGIN/.codex-plugin/plugin.json"
+cp "$ROOT/tests/fixtures/agent-spec.json" "$DEEPSEEK_PLUGIN/agent-spec.json"
+cp "$ROOT/plugins/volcengine-agent/.codex-plugin/plugin.json" "$VOLCENGINE_PLUGIN/.codex-plugin/plugin.json"
+cp "$ROOT/tests/fixtures/agent-spec.json" "$VOLCENGINE_PLUGIN/agent-spec.json"
 
 run_lifecycle() {
   cleanup_home=$1
@@ -30,9 +30,9 @@ run_lifecycle() {
   sh "$ROOT/shared/lifecycle.sh" "$@"
 }
 
-install_developer() {
-  run_lifecycle "$1" "$DEVELOPER_PLUGIN" \
-    install deepseek-developer development deepseek http://localhost:11434 fixture-model
+install_deepseek() {
+  run_lifecycle "$1" "$DEEPSEEK_PLUGIN" \
+    install deepseek-agent deepseek http://localhost:11434 fixture-model
 }
 
 assert_active_lifecycle_same() {
@@ -43,7 +43,9 @@ assert_active_lifecycle_same() {
   assert_same_file "$expected_dir/state.json" "$actual_home/custom-subagents/state.json"
   assert_same_file "$expected_dir/models-v1.json" "$actual_home/custom-subagents/models-v1.json"
   assert_same_file "$expected_dir/base-model-catalog.json" "$actual_home/custom-subagents/base-model-catalog.json"
-  assert_same_file "$expected_dir/deepseek_developer.toml" "$actual_home/agents/deepseek_developer.toml"
+  for profile in general developer reviewer; do
+    assert_same_file "$expected_dir/deepseek_$profile.toml" "$actual_home/agents/deepseek_$profile.toml"
+  done
 }
 
 assert_uninstall_rejected_unchanged() {
@@ -51,7 +53,7 @@ assert_uninstall_rejected_unchanged() {
   reject_home=$2
   reject_before="$TEMP_ROOT/$reject_label.before"
   cp -Rp "$reject_home" "$reject_before"
-  if run_lifecycle "$reject_home" "$DEVELOPER_PLUGIN" uninstall deepseek-developer \
+  if run_lifecycle "$reject_home" "$DEEPSEEK_PLUGIN" uninstall deepseek-agent \
     >"$TEMP_ROOT/$reject_label.err" 2>&1; then
     fail "$reject_label unexpectedly allowed idempotent uninstall"
   fi
@@ -95,54 +97,60 @@ cp "$ROOT/tests/fixtures/config-minimal.toml" "$CYCLE_HOME/config.toml"
 printf '%s' 'Original workflow instructions.' >"$CYCLE_HOME/AGENTS.md"
 cp "$CYCLE_HOME/config.toml" "$TEMP_ROOT/cycle/config.original"
 cp "$CYCLE_HOME/AGENTS.md" "$TEMP_ROOT/cycle/AGENTS.original"
-install_developer "$CYCLE_HOME"
-run_lifecycle "$CYCLE_HOME" "$DEVELOPER_PLUGIN" uninstall deepseek-developer
+install_deepseek "$CYCLE_HOME"
+run_lifecycle "$CYCLE_HOME" "$DEEPSEEK_PLUGIN" uninstall deepseek-agent
 assert_same_file "$TEMP_ROOT/cycle/config.original" "$CYCLE_HOME/config.toml"
 assert_same_file "$TEMP_ROOT/cycle/AGENTS.original" "$CYCLE_HOME/AGENTS.md"
-assert_not_file "$CYCLE_HOME/agents/deepseek_developer.toml"
+for profile in general developer reviewer; do
+  assert_not_file "$CYCLE_HOME/agents/deepseek_$profile.toml"
+done
 assert_not_file "$CYCLE_HOME/custom-subagents/state.json"
 assert_not_file "$CYCLE_HOME/custom-subagents/models-v1.json"
 assert_not_file "$CYCLE_HOME/custom-subagents/base-model-catalog.json"
 assert_dir "$CYCLE_HOME/custom-subagents/backups"
 
-run_lifecycle "$CYCLE_HOME" "$DEVELOPER_PLUGIN" uninstall deepseek-developer
-install_developer "$CYCLE_HOME"
+run_lifecycle "$CYCLE_HOME" "$DEEPSEEK_PLUGIN" uninstall deepseek-agent
+install_deepseek "$CYCLE_HOME"
 assert_file "$CYCLE_HOME/custom-subagents/state.json"
 assert_file "$CYCLE_HOME/custom-subagents/models-v1.json"
 assert_file "$CYCLE_HOME/custom-subagents/base-model-catalog.json"
-assert_file "$CYCLE_HOME/agents/deepseek_developer.toml"
-run_lifecycle "$CYCLE_HOME" "$DEVELOPER_PLUGIN" uninstall deepseek-developer
+for profile in general developer reviewer; do
+  assert_file "$CYCLE_HOME/agents/deepseek_$profile.toml"
+done
+run_lifecycle "$CYCLE_HOME" "$DEEPSEEK_PLUGIN" uninstall deepseek-agent
 
 TWO_HOME="$TEMP_ROOT/two-agent/home"
 mkdir -p "$TWO_HOME"
 cp "$ROOT/tests/fixtures/config-minimal.toml" "$TWO_HOME/config.toml"
-install_developer "$TWO_HOME"
-run_lifecycle "$TWO_HOME" "$REVIEWER_PLUGIN" \
-  install reviewer-agent review volcengine http://localhost:11434 fixture-model-2
-run_lifecycle "$TWO_HOME" "$DEVELOPER_PLUGIN" uninstall deepseek-developer
+install_deepseek "$TWO_HOME"
+run_lifecycle "$TWO_HOME" "$VOLCENGINE_PLUGIN" \
+  install volcengine-agent volcengine http://localhost:11434 fixture-model-2
+run_lifecycle "$TWO_HOME" "$DEEPSEEK_PLUGIN" uninstall deepseek-agent
 assert_file "$TWO_HOME/custom-subagents/state.json"
 assert_file "$TWO_HOME/custom-subagents/models-v1.json"
-assert_file "$TWO_HOME/agents/reviewer_agent.toml"
-assert_not_file "$TWO_HOME/agents/deepseek_developer.toml"
-assert_contains "$TWO_HOME/custom-subagents/state.json" '"id": "reviewer-agent"'
+for profile in general developer reviewer; do
+  assert_file "$TWO_HOME/agents/volcengine_$profile.toml"
+  assert_not_file "$TWO_HOME/agents/deepseek_$profile.toml"
+done
+assert_contains "$TWO_HOME/custom-subagents/state.json" '"id": "volcengine-agent"'
 assert_contains "$TWO_HOME/custom-subagents/models-v1.json" '"id": "official:gpt-5.6-sol"'
 assert_contains "$TWO_HOME/custom-subagents/models-v1.json" '"id": "official:unrelated-model"'
-assert_contains "$TWO_HOME/AGENTS.md" 'review agent type: reviewer_agent'
+assert_contains "$TWO_HOME/AGENTS.md" 'volcengine_reviewer'
 
 TWO_NOOP_BEFORE="$TEMP_ROOT/two-agent/noop-before"
 copy_home "$TWO_HOME" "$TWO_NOOP_BEFORE"
-run_lifecycle "$TWO_HOME" "$DEVELOPER_PLUGIN" uninstall deepseek-developer
+run_lifecycle "$TWO_HOME" "$DEEPSEEK_PLUGIN" uninstall deepseek-agent
 diff -r "$TWO_NOOP_BEFORE" "$TWO_HOME" >/dev/null 2>&1 ||
   fail 'valid target-absent uninstall with another agent mutated the home'
 
 REGISTRY_MISMATCH_HOME="$TEMP_ROOT/registry-mismatch/home"
 clone_active_home "$TWO_HOME" "$REGISTRY_MISMATCH_HOME"
-printf '%s\n' 'unregistered target agent residue' >"$REGISTRY_MISMATCH_HOME/agents/deepseek_developer.toml"
+printf '%s\n' 'unregistered target provider residue' >"$REGISTRY_MISMATCH_HOME/agents/deepseek_general.toml"
 assert_uninstall_rejected_unchanged registry-mismatch "$REGISTRY_MISMATCH_HOME"
 
 DANGLING_AGENT_HOME="$TEMP_ROOT/dangling-agent/home"
 clone_active_home "$TWO_HOME" "$DANGLING_AGENT_HOME"
-ln -s "$TEMP_ROOT/missing-agent-target" "$DANGLING_AGENT_HOME/agents/deepseek_developer.toml"
+ln -s "$TEMP_ROOT/missing-agent-target" "$DANGLING_AGENT_HOME/agents/deepseek_general.toml"
 assert_uninstall_rejected_unchanged dangling-agent "$DANGLING_AGENT_HOME"
 
 SYMLINK_STATE_HOME="$TEMP_ROOT/symlink-state/home"
@@ -179,7 +187,7 @@ assert_uninstall_rejected_unchanged noop-config-mismatch "$CONFIG_MISMATCH_HOME"
 
 WORKFLOW_MISMATCH_HOME="$TEMP_ROOT/noop-workflow-mismatch/home"
 clone_active_home "$TWO_HOME" "$WORKFLOW_MISMATCH_HOME"
-sed 's/review agent type: reviewer_agent/review agent type: altered_agent/' \
+sed 's/volcengine_reviewer/altered_provider_reviewer/' \
   "$WORKFLOW_MISMATCH_HOME/AGENTS.md" >"$WORKFLOW_MISMATCH_HOME/AGENTS.md.invalid"
 mv "$WORKFLOW_MISMATCH_HOME/AGENTS.md.invalid" "$WORKFLOW_MISMATCH_HOME/AGENTS.md"
 assert_uninstall_rejected_unchanged noop-workflow-mismatch "$WORKFLOW_MISMATCH_HOME"
@@ -193,7 +201,7 @@ assert_recovery_output noop-duplicate-marker 'duplicate or malformed managed wor
 MALFORMED_STATE_HOME="$TEMP_ROOT/malformed-state/home"
 mkdir -p "$MALFORMED_STATE_HOME"
 cp "$ROOT/tests/fixtures/config-minimal.toml" "$MALFORMED_STATE_HOME/config.toml"
-install_developer "$MALFORMED_STATE_HOME"
+install_deepseek "$MALFORMED_STATE_HOME"
 printf '%s\n' '{not-json' >"$MALFORMED_STATE_HOME/custom-subagents/state.json"
 assert_uninstall_rejected_unchanged malformed-state "$MALFORMED_STATE_HOME"
 assert_recovery_output malformed-state 'state registry is not valid JSON'
@@ -201,7 +209,7 @@ assert_recovery_output malformed-state 'state registry is not valid JSON'
 MALFORMED_CATALOG_HOME="$TEMP_ROOT/malformed-catalog/home"
 mkdir -p "$MALFORMED_CATALOG_HOME"
 cp "$ROOT/tests/fixtures/config-minimal.toml" "$MALFORMED_CATALOG_HOME/config.toml"
-install_developer "$MALFORMED_CATALOG_HOME"
+install_deepseek "$MALFORMED_CATALOG_HOME"
 printf '%s\n' '{not-json' >"$MALFORMED_CATALOG_HOME/custom-subagents/models-v1.json"
 assert_uninstall_rejected_unchanged malformed-catalog "$MALFORMED_CATALOG_HOME"
 assert_recovery_output malformed-catalog 'managed catalog is not valid JSON'
@@ -209,7 +217,7 @@ assert_recovery_output malformed-catalog 'managed catalog is not valid JSON'
 MISSING_BACKUPS_HOME="$TEMP_ROOT/missing-backups/home"
 mkdir -p "$MISSING_BACKUPS_HOME"
 cp "$ROOT/tests/fixtures/config-minimal.toml" "$MISSING_BACKUPS_HOME/config.toml"
-install_developer "$MISSING_BACKUPS_HOME"
+install_deepseek "$MISSING_BACKUPS_HOME"
 rm -rf "$MISSING_BACKUPS_HOME/custom-subagents/backups"
 assert_uninstall_rejected_unchanged missing-backups "$MISSING_BACKUPS_HOME"
 assert_recovery_output missing-backups 'managed backup history is missing'
@@ -217,28 +225,30 @@ assert_recovery_output missing-backups 'managed backup history is missing'
 EMPTY_BACKUPS_HOME="$TEMP_ROOT/empty-backups/home"
 mkdir -p "$EMPTY_BACKUPS_HOME"
 cp "$ROOT/tests/fixtures/config-minimal.toml" "$EMPTY_BACKUPS_HOME/config.toml"
-install_developer "$EMPTY_BACKUPS_HOME"
+install_deepseek "$EMPTY_BACKUPS_HOME"
 rm -rf "$EMPTY_BACKUPS_HOME/custom-subagents/backups"
 mkdir -p "$EMPTY_BACKUPS_HOME/custom-subagents/backups"
 assert_uninstall_rejected_unchanged empty-backups "$EMPTY_BACKUPS_HOME"
 assert_recovery_output empty-backups 'managed backup history is missing'
 
-for boundary in 1 2 3 4 5 6; do
+for boundary in 1 2 3 4 5 6 7 8; do
   FAILURE_HOME="$TEMP_ROOT/failure-$boundary/home"
   FAILURE_BEFORE="$TEMP_ROOT/failure-$boundary/before"
   mkdir -p "$FAILURE_HOME" "$FAILURE_BEFORE"
   cp "$ROOT/tests/fixtures/config-minimal.toml" "$FAILURE_HOME/config.toml"
   printf '%s\n' 'Rollback workflow instructions.' >"$FAILURE_HOME/AGENTS.md"
-  install_developer "$FAILURE_HOME"
+  install_deepseek "$FAILURE_HOME"
   cp "$FAILURE_HOME/config.toml" "$FAILURE_BEFORE/config.toml"
   cp "$FAILURE_HOME/AGENTS.md" "$FAILURE_BEFORE/AGENTS.md"
   cp "$FAILURE_HOME/custom-subagents/state.json" "$FAILURE_BEFORE/state.json"
   cp "$FAILURE_HOME/custom-subagents/models-v1.json" "$FAILURE_BEFORE/models-v1.json"
   cp "$FAILURE_HOME/custom-subagents/base-model-catalog.json" "$FAILURE_BEFORE/base-model-catalog.json"
-  cp "$FAILURE_HOME/agents/deepseek_developer.toml" "$FAILURE_BEFORE/deepseek_developer.toml"
+  for profile in general developer reviewer; do
+    cp "$FAILURE_HOME/agents/deepseek_$profile.toml" "$FAILURE_BEFORE/deepseek_$profile.toml"
+  done
 
   if ( CUSTOM_SUBAGENT_FAIL_AFTER_WRITE="$boundary" \
-    run_lifecycle "$FAILURE_HOME" "$DEVELOPER_PLUGIN" uninstall deepseek-developer ) \
+    run_lifecycle "$FAILURE_HOME" "$DEEPSEEK_PLUGIN" uninstall deepseek-agent ) \
     >/dev/null 2>&1; then
     fail "final uninstall failure boundary $boundary unexpectedly succeeded"
   fi
@@ -249,10 +259,10 @@ RESIDUE_HOME="$TEMP_ROOT/residue/home"
 RESIDUE_BEFORE="$TEMP_ROOT/residue/before"
 mkdir -p "$RESIDUE_HOME"
 cp "$ROOT/tests/fixtures/config-minimal.toml" "$RESIDUE_HOME/config.toml"
-install_developer "$RESIDUE_HOME"
+install_deepseek "$RESIDUE_HOME"
 rm "$RESIDUE_HOME/custom-subagents/state.json"
 cp -Rp "$RESIDUE_HOME" "$RESIDUE_BEFORE"
-if run_lifecycle "$RESIDUE_HOME" "$DEVELOPER_PLUGIN" uninstall deepseek-developer \
+if run_lifecycle "$RESIDUE_HOME" "$DEEPSEEK_PLUGIN" uninstall deepseek-agent \
   >"$TEMP_ROOT/residue/uninstall.err" 2>&1; then
   fail 'state-absent uninstall with managed residue unexpectedly succeeded'
 fi

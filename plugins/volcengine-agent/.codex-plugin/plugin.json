@@ -1,0 +1,32 @@
+{
+  "name": "volcengine-agent",
+  "version": "0.1.0",
+  "description": "Configure Volcengine native provider profiles for general work, development, and read-only review in Codex Desktop.",
+  "author": {
+    "name": "Catlane"
+  },
+  "license": "MIT",
+  "keywords": [
+    "codex",
+    "subagent",
+    "volcengine",
+    "provider",
+    "review"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Volcengine Agent",
+    "shortDescription": "Configure Volcengine provider profiles",
+    "longDescription": "Installs and manages Volcengine provider profiles for general work, development, and independent read-only review while keeping GPT as the Codex main agent.",
+    "developerName": "Catlane",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive"
+    ],
+    "defaultPrompt": [
+      "Configure my Volcengine provider agents",
+      "Check the Volcengine provider agent status",
+      "Uninstall my Volcengine provider agents"
+    ]
+  }
+}

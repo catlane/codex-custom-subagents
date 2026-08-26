@@ -14,54 +14,56 @@ STATE_LINK="$TEMP_ROOT/state-link.json"
 ENDPOINT='https://example.test/v1'
 OTHER_ENDPOINT='https://other.example.test/v1'
 
-printf '%s\n' '{"version":1,"catalog_path":"/tmp/models-v1.json","base_catalog_path":"/tmp/base-model-catalog.json","base_catalog_source":"/tmp/models-cache.json","base_catalog_source_kind":"test-override","primary_model":"gpt-5.6-sol","initial_agents_shape":"absent","initial_config_shape":"ends-newline","original_model_catalog_line":null,"agents":[{"id":"deepseek-developer","role":"development","provider":"deepseek","endpoint":"https://example.test/v1","model":"fixture-model"}]}' >"$STATE"
+printf '%s\n' '{"version":1,"catalog_path":"/tmp/models-v1.json","base_catalog_path":"/tmp/base-model-catalog.json","base_catalog_source":"/tmp/models-cache.json","base_catalog_source_kind":"test-override","primary_model":"gpt-5.6-sol","initial_agents_shape":"absent","initial_config_shape":"ends-newline","original_model_catalog_line":null,"agents":[{"id":"deepseek-agent","provider":"deepseek","endpoint":"https://example.test/v1","model":"fixture-model"}]}' >"$STATE"
 
 state_status() {
   /usr/bin/osascript -l JavaScript "$ROOT/shared/state.js" \
     keychain-binding-status "$1" "$2" "$3"
 }
 
-assert_equals match "$(state_status "$STATE" deepseek-developer "$ENDPOINT")"
-assert_equals mismatch "$(state_status "$STATE" deepseek-developer "$OTHER_ENDPOINT")"
-assert_equals absent "$(state_status "$STATE" missing-agent "$ENDPOINT")"
+state_command() {
+  /usr/bin/osascript -l JavaScript "$ROOT/shared/state.js" "$@"
+}
 
 assert_rejected_without_endpoint() {
   label=$1
   forbidden_endpoint=$2
-  stdout_file=$3
-  stderr_file=$4
-  shift 4
-  if "$@" >"$stdout_file" 2>"$stderr_file"; then
+  shift 2
+  if "$@" >"$TEMP_ROOT/$label.out" 2>"$TEMP_ROOT/$label.err"; then
     fail "$label was accepted"
   fi
-  if grep -F -- "$forbidden_endpoint" "$stdout_file" "$stderr_file" >/dev/null 2>&1; then
+  if grep -F -- "$forbidden_endpoint" "$TEMP_ROOT/$label.out" "$TEMP_ROOT/$label.err" >/dev/null 2>&1; then
     fail "$label leaked endpoint"
   fi
-  [ ! -s "$stdout_file" ] || fail "$label wrote stdout"
+  [ ! -s "$TEMP_ROOT/$label.out" ] || fail "$label wrote stdout"
 }
 
-printf '%s\n' '{not-json' >"$TEMP_ROOT/malformed.json"
-assert_rejected_without_endpoint malformed-state "$ENDPOINT" \
-  "$TEMP_ROOT/malformed.out" "$TEMP_ROOT/malformed.err" \
-  state_status "$TEMP_ROOT/malformed.json" deepseek-developer "$ENDPOINT"
+assert_equals match "$(state_status "$STATE" deepseek-agent "$ENDPOINT")"
+assert_equals mismatch "$(state_status "$STATE" deepseek-agent "$OTHER_ENDPOINT")"
+assert_equals absent "$(state_status "$STATE" missing-provider "$ENDPOINT")"
+assert_equals 1 "$(state_command provider-present "$STATE" deepseek-agent)"
+assert_equals 0 "$(state_command provider-present "$STATE" missing-provider)"
+state_command validate-provider-input deepseek-agent deepseek "$ENDPOINT" fixture-model >/dev/null
 
-assert_rejected_without_endpoint missing-state "$ENDPOINT" \
-  "$TEMP_ROOT/missing.out" "$TEMP_ROOT/missing.err" \
-  state_status "$TEMP_ROOT/missing.json" deepseek-developer "$ENDPOINT"
+# State keeps exactly one record per provider; fixed-role records and duplicate IDs fail closed.
+printf '%s\n' '{"version":1,"catalog_path":"/tmp/models-v1.json","base_catalog_path":"/tmp/base-model-catalog.json","base_catalog_source":"/tmp/models-cache.json","base_catalog_source_kind":"test-override","primary_model":"gpt-5.6-sol","initial_agents_shape":"absent","initial_config_shape":"ends-newline","original_model_catalog_line":null,"agents":[{"id":"deepseek-agent","role":"development","provider":"deepseek","endpoint":"https://example.test/v1","model":"fixture-model"}]}' >"$TEMP_ROOT/fixed-role.json"
+assert_rejected_without_endpoint fixed-role-state "$ENDPOINT" state_command read "$TEMP_ROOT/fixed-role.json"
+
+printf '%s\n' '{"version":1,"catalog_path":"/tmp/models-v1.json","base_catalog_path":"/tmp/base-model-catalog.json","base_catalog_source":"/tmp/models-cache.json","base_catalog_source_kind":"test-override","primary_model":"gpt-5.6-sol","initial_agents_shape":"absent","initial_config_shape":"ends-newline","original_model_catalog_line":null,"agents":[{"id":"deepseek-agent","provider":"deepseek","endpoint":"https://example.test/v1","model":"fixture-model"},{"id":"deepseek-agent","provider":"deepseek","endpoint":"https://example.test/v1","model":"other-model"}]}' >"$TEMP_ROOT/duplicate.json"
+assert_rejected_without_endpoint duplicate-provider "$ENDPOINT" state_command read "$TEMP_ROOT/duplicate.json"
+
+printf '%s\n' '{not-json' >"$TEMP_ROOT/malformed.json"
+assert_rejected_without_endpoint malformed-state "$ENDPOINT" state_status "$TEMP_ROOT/malformed.json" deepseek-agent "$ENDPOINT"
+assert_rejected_without_endpoint missing-state "$ENDPOINT" state_status "$TEMP_ROOT/missing.json" deepseek-agent "$ENDPOINT"
 
 mkdir "$TEMP_ROOT/state-directory"
-assert_rejected_without_endpoint state-read-error "$ENDPOINT" \
-  "$TEMP_ROOT/read-error.out" "$TEMP_ROOT/read-error.err" \
-  state_status "$TEMP_ROOT/state-directory" deepseek-developer "$ENDPOINT"
+assert_rejected_without_endpoint state-read-error "$ENDPOINT" state_status "$TEMP_ROOT/state-directory" deepseek-agent "$ENDPOINT"
 
 cp "$STATE" "$STATE_TARGET"
 ln -s "$STATE_TARGET" "$STATE_LINK"
-assert_rejected_without_endpoint symlink-state "$ENDPOINT" \
-  "$TEMP_ROOT/symlink.out" "$TEMP_ROOT/symlink.err" \
-  state_status "$STATE_LINK" deepseek-developer "$ENDPOINT"
+assert_rejected_without_endpoint symlink-state "$ENDPOINT" state_status "$STATE_LINK" deepseek-agent "$ENDPOINT"
 
 assert_rejected_without_endpoint invalid-requested-endpoint 'https://user:password@example.test' \
-  "$TEMP_ROOT/invalid-endpoint.out" "$TEMP_ROOT/invalid-endpoint.err" \
-  state_status "$STATE" deepseek-developer 'https://user:password@example.test'
+  state_status "$STATE" deepseek-agent 'https://user:password@example.test'
 
-printf '%s\n' 'PASS: lifecycle state commands'
+printf '%s\n' 'PASS: lifecycle provider state commands'

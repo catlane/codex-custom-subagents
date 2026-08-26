@@ -1,7 +1,21 @@
 {
   "schema_version": 1,
-  "description": "Fixed custom subagent",
-  "developer_instructions": "Work only on the delegated task. Preserve unrelated changes and run focused verification.",
   "provider_display_name": "Custom subagent provider",
-  "wire_api": "responses"
+  "wire_api": "responses",
+  "profiles": {
+    "general": {
+      "description": "General custom subagent",
+      "developer_instructions": "Handle the delegated task within its stated scope. Preserve unrelated changes and report verification evidence."
+    },
+    "developer": {
+      "description": "Development custom subagent",
+      "developer_instructions": "Implement only the delegated task with explicit file ownership. Preserve unrelated changes and run focused verification."
+    },
+    "reviewer": {
+      "description": "Read-only review custom subagent",
+      "developer_instructions": "Review the delegated requirements, diff, and evidence. Report findings first and do not modify files.",
+      "sandbox_mode": "read-only",
+      "approval_policy": "never"
+    }
+  }
 }

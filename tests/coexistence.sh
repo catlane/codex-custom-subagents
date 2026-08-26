@@ -6,27 +6,50 @@ ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 . "$ROOT/tests/helpers/assert.sh"
 
 export CUSTOM_SUBAGENT_TEST_MODE=1
-export CUSTOM_SUBAGENT_TEST_APPROVAL=custom-subagents-isolated-test-harness
 export CUSTOM_SUBAGENT_TEST_CATALOG_SOURCE="$ROOT/tests/fixtures/models-cache.json"
 export CUSTOM_SUBAGENT_TEST_PRIMARY_MODEL=gpt-5.6-sol
 
 TEMP_ROOT=$(mktemp -d /private/tmp/custom-subagents-coexistence.XXXXXX)
 trap 'rm -rf "$TEMP_ROOT"' EXIT HUP INT TERM
 
-TEST_MARKETPLACE="$TEMP_ROOT/test-marketplace"
-DEEPSEEK_ROOT="$TEST_MARKETPLACE/plugins/deepseek-developer"
-VOLCENGINE_ROOT="$TEST_MARKETPLACE/plugins/volcengine-reviewer"
-TEST_HELPERS="$TEST_MARKETPLACE/tests/helpers"
-mkdir -p "$TEST_MARKETPLACE/plugins" "$TEST_MARKETPLACE/tests"
-cp -R "$ROOT/plugins/deepseek-developer" "$DEEPSEEK_ROOT"
-cp -R "$ROOT/plugins/volcengine-reviewer" "$VOLCENGINE_ROOT"
-cp -R "$ROOT/tests/helpers" "$TEST_HELPERS"
-cp "$ROOT/tests/fixtures/plugin-test-runtime-gate.sh" "$DEEPSEEK_ROOT/scripts/runtime-gate.sh"
-cp "$ROOT/tests/fixtures/plugin-test-runtime-gate.sh" "$VOLCENGINE_ROOT/scripts/runtime-gate.sh"
-FAKE_SECURITY="$TEST_HELPERS/fake-security.sh"
-FAKE_OSASCRIPT="$TEST_HELPERS/fake-osascript.sh"
-DEEPSEEK_SERVICE='codex-custom-subagent/deepseek-developer|api-key'
-VOLCENGINE_SERVICE='codex-custom-subagent/volcengine-reviewer|api-key'
+make_plugin() {
+  plugin_root=$1
+  plugin_name=$2
+  mkdir -p "$plugin_root/.codex-plugin"
+  printf '%s\n' "{\"name\":\"$plugin_name\"}" >"$plugin_root/.codex-plugin/plugin.json"
+  cp "$ROOT/tests/fixtures/agent-spec.json" "$plugin_root/agent-spec.json"
+}
+
+DEEPSEEK_PLUGIN="$TEMP_ROOT/deepseek-agent"
+VOLCENGINE_PLUGIN="$TEMP_ROOT/volcengine-agent"
+make_plugin "$DEEPSEEK_PLUGIN" deepseek-agent
+make_plugin "$VOLCENGINE_PLUGIN" volcengine-agent
+
+new_home() {
+  home_name=$1
+  TEST_HOME="$TEMP_ROOT/$home_name/home"
+  mkdir -p "$TEST_HOME"
+  cp "$ROOT/tests/fixtures/config-minimal.toml" "$TEST_HOME/config.toml"
+  printf '%s\n' 'Repository-owned workflow instruction.' >"$TEST_HOME/AGENTS.md"
+}
+
+run_for() {
+  plugin_root=$1
+  shift
+  CUSTOM_SUBAGENT_HOME="$TEST_HOME" \
+  CUSTOM_SUBAGENT_PLUGIN_ROOT="$plugin_root" \
+  CUSTOM_SUBAGENT_AGENT_SPEC="$plugin_root/agent-spec.json" \
+  CUSTOM_SUBAGENT_ALLOW_HTTP=1 \
+  sh "$ROOT/shared/lifecycle.sh" "$@"
+}
+
+install_deepseek() {
+  run_for "$DEEPSEEK_PLUGIN" install deepseek-agent deepseek http://localhost:11434 deepseek-model
+}
+
+install_volcengine() {
+  run_for "$VOLCENGINE_PLUGIN" install volcengine-agent volcengine http://localhost:11434 volcengine-model
+}
 
 assert_not_contains() {
   file=$1
@@ -36,130 +59,74 @@ assert_not_contains() {
   fi
 }
 
-new_case() {
-  case_name=$1
-  CASE_ROOT="$TEMP_ROOT/$case_name"
-  TEST_HOME="$CASE_ROOT/home"
-  FAKE_STATE="$CASE_ROOT/keychain-state"
-  FAKE_LOG="$CASE_ROOT/security.log"
-  DIALOG_LOG="$CASE_ROOT/dialog.log"
-  mkdir -p "$TEST_HOME"
-  cp "$ROOT/tests/fixtures/config-minimal.toml" "$TEST_HOME/config.toml"
-  printf '%s\n' 'Unrelated workflow instruction.' >"$TEST_HOME/AGENTS.md"
-  printf '%s\n' 'unrelated file' >"$TEST_HOME/unrelated.txt"
-  : >"$FAKE_STATE"
-  : >"$FAKE_LOG"
-  : >"$DIALOG_LOG"
+assert_precedence() {
+  workflow=$1
+  user_line=$(grep -n -F 'Direct user instructions and repository-specific AGENTS.md rules take precedence.' "$workflow" | cut -d: -f1)
+  none_line=$(grep -n -F 'A no-subagents request keeps the work in the main task.' "$workflow" | cut -d: -f1)
+  official_line=$(grep -n -F 'An official GPT request selects GPT default, worker, or explorer roles.' "$workflow" | cut -d: -f1)
+  explicit_line=$(grep -n -F 'An explicit custom provider and/or role request overrides automatic selection.' "$workflow" | cut -d: -f1)
+  automatic_line=$(grep -n -F 'Otherwise, select an installed provider and general, developer, or reviewer role according to task fit.' "$workflow" | cut -d: -f1)
+  [ "$user_line" -lt "$none_line" ] && [ "$none_line" -lt "$official_line" ] &&
+    [ "$official_line" -lt "$explicit_line" ] && [ "$explicit_line" -lt "$automatic_line" ] ||
+    fail 'workflow routing precedence is incorrect'
 }
 
-configure_deepseek() {
-  CODEX_HOME="$TEST_HOME" \
-  CUSTOM_SUBAGENT_SECURITY_BIN="$FAKE_SECURITY" \
-  CUSTOM_SUBAGENT_OSASCRIPT_BIN="$FAKE_OSASCRIPT" \
-  FAKE_SECURITY_STATE="$FAKE_STATE" \
-  FAKE_SECURITY_LOG="$FAKE_LOG" \
-  FAKE_DIALOG_SCRIPT_LOG="$DIALOG_LOG" \
-  FAKE_DIALOG_MODE=accept \
-  FAKE_DIALOG_VALUE='fixture-dialog-value' \
-  sh "$DEEPSEEK_ROOT/scripts/configure.sh" --model deepseek-chat >/dev/null
+assert_provider_profiles() {
+  provider=$1
+  assert_file "$TEST_HOME/agents/${provider}_general.toml"
+  assert_file "$TEST_HOME/agents/${provider}_developer.toml"
+  assert_file "$TEST_HOME/agents/${provider}_reviewer.toml"
+  assert_contains "$TEST_HOME/AGENTS.md" \
+    "provider $provider agent types: ${provider}_general, ${provider}_developer, ${provider}_reviewer."
 }
 
-configure_volcengine() {
-  CODEX_HOME="$TEST_HOME" \
-  CUSTOM_SUBAGENT_SECURITY_BIN="$FAKE_SECURITY" \
-  CUSTOM_SUBAGENT_OSASCRIPT_BIN="$FAKE_OSASCRIPT" \
-  FAKE_SECURITY_STATE="$FAKE_STATE" \
-  FAKE_SECURITY_LOG="$FAKE_LOG" \
-  FAKE_DIALOG_SCRIPT_LOG="$DIALOG_LOG" \
-  FAKE_DIALOG_MODE=accept \
-  FAKE_DIALOG_VALUE='fixture-dialog-value' \
-  sh "$VOLCENGINE_ROOT/scripts/configure.sh" \
-    --endpoint https://ark.example.invalid/api/v3 \
-    --model ep-review-fixture >/dev/null
-}
+# One provider may supply separate development and independent review children.
+new_home deepseek-only
+install_deepseek
+assert_provider_profiles deepseek
+assert_precedence "$TEST_HOME/AGENTS.md"
+assert_contains "$TEST_HOME/AGENTS.md" 'The same provider may be used for separate development and independent review children.'
+assert_not_contains "$TEST_HOME/AGENTS.md" 'provider volcengine agent types:'
 
-assert_common() {
-  assert_file "$TEST_HOME/custom-subagents/state.json"
-  assert_file "$TEST_HOME/custom-subagents/models-v1.json"
-  assert_contains "$TEST_HOME/custom-subagents/models-v1.json" '"id": "official:gpt-5.6-sol"'
-  assert_contains "$TEST_HOME/custom-subagents/models-v1.json" '"slug": "unrelated-model"'
-  assert_contains "$TEST_HOME/custom-subagents/models-v1.json" '"multi_agent_version": "v1"'
-  assert_not_contains "$TEST_HOME/custom-subagents/models-v1.json" 'deepseek:deepseek-chat'
-  assert_not_contains "$TEST_HOME/custom-subagents/models-v1.json" 'volcengine:ep-review-fixture'
-  assert_contains "$TEST_HOME/AGENTS.md" 'Unrelated workflow instruction.'
-  assert_contains "$TEST_HOME/AGENTS.md" 'Explicit no-subagents requests stay in the main task.'
-  assert_contains "$TEST_HOME/AGENTS.md" 'Official subagents use GPT default, worker, or explorer roles in the same V1 task.'
-  assert_contains "$TEST_HOME/config.toml" 'base_url = "https://example.com"'
-  assert_contains "$TEST_HOME/unrelated.txt" 'unrelated file'
-}
+new_home volcengine-only
+install_volcengine
+assert_provider_profiles volcengine
+assert_precedence "$TEST_HOME/AGENTS.md"
+assert_contains "$TEST_HOME/AGENTS.md" 'The same provider may be used for separate development and independent review children.'
+assert_not_contains "$TEST_HOME/AGENTS.md" 'provider deepseek agent types:'
 
-assert_deepseek_present() {
-  assert_file "$TEST_HOME/agents/deepseek_developer.toml"
-  assert_contains "$TEST_HOME/custom-subagents/state.json" '"id": "deepseek-developer"'
-  assert_contains "$TEST_HOME/AGENTS.md" 'development agent type: deepseek_developer'
-  assert_contains "$FAKE_STATE" "$DEEPSEEK_SERVICE"
-}
+# Two providers permit cross-model routing or repeated use of either provider,
+# while explicit user provider/role choices remain above automatic selection.
+new_home deepseek-then-volcengine
+install_deepseek
+install_volcengine
+assert_provider_profiles deepseek
+assert_provider_profiles volcengine
+assert_precedence "$TEST_HOME/AGENTS.md"
+assert_contains "$TEST_HOME/AGENTS.md" 'With multiple providers, roles may be split across providers or one provider may be reused.'
+deepseek_line=$(grep -n -F 'provider deepseek agent types:' "$TEST_HOME/AGENTS.md" | cut -d: -f1)
+volcengine_line=$(grep -n -F 'provider volcengine agent types:' "$TEST_HOME/AGENTS.md" | cut -d: -f1)
+[ "$deepseek_line" -lt "$volcengine_line" ] || fail 'provider workflow entries are not deterministic'
+assert_not_contains "$TEST_HOME/AGENTS.md" 'DeepSeek handles development'
+assert_not_contains "$TEST_HOME/AGENTS.md" 'Volcengine performs review'
 
-assert_volcengine_present() {
-  assert_file "$TEST_HOME/agents/volcengine_reviewer.toml"
-  assert_contains "$TEST_HOME/custom-subagents/state.json" '"id": "volcengine-reviewer"'
-  assert_contains "$TEST_HOME/AGENTS.md" 'review agent type: volcengine_reviewer'
-  assert_contains "$FAKE_STATE" "$VOLCENGINE_SERVICE"
-}
+new_home volcengine-then-deepseek
+install_volcengine
+install_deepseek
+assert_provider_profiles deepseek
+assert_provider_profiles volcengine
+assert_precedence "$TEST_HOME/AGENTS.md"
+assert_equals 1 "$(grep -c '"id": "deepseek-agent"' "$TEST_HOME/custom-subagents/state.json")"
+assert_equals 1 "$(grep -c '"id": "volcengine-agent"' "$TEST_HOME/custom-subagents/state.json")"
 
-# Each independently installed plugin must generate a self-consistent V1 setup.
-new_case deepseek-only
-configure_deepseek
-assert_common
-assert_deepseek_present
-assert_not_file "$TEST_HOME/agents/volcengine_reviewer.toml"
-assert_not_contains "$TEST_HOME/AGENTS.md" 'volcengine_reviewer'
-assert_equals 1 "$(wc -l <"$FAKE_STATE" | tr -d ' ')"
-
-new_case volcengine-only
-configure_volcengine
-assert_common
-assert_volcengine_present
-assert_not_file "$TEST_HOME/agents/deepseek_developer.toml"
-assert_not_contains "$TEST_HOME/AGENTS.md" 'deepseek_developer'
-assert_equals 1 "$(wc -l <"$FAKE_STATE" | tr -d ' ')"
-
-# Both installation orders must converge on the same registry and routing policy.
-new_case deepseek-then-volcengine
-configure_deepseek
-configure_volcengine
-assert_common
-assert_deepseek_present
-assert_volcengine_present
-assert_equals 2 "$(wc -l <"$FAKE_STATE" | tr -d ' ')"
-deepseek_line=$(grep -n -F 'development agent type: deepseek_developer' "$TEST_HOME/AGENTS.md" | cut -d: -f1)
-review_line=$(grep -n -F 'review agent type: volcengine_reviewer' "$TEST_HOME/AGENTS.md" | cut -d: -f1)
-[ "$deepseek_line" -lt "$review_line" ] || fail 'development is not routed before independent review'
-
-new_case volcengine-then-deepseek
-configure_volcengine
-configure_deepseek
-assert_common
-assert_deepseek_present
-assert_volcengine_present
-assert_equals 2 "$(wc -l <"$FAKE_STATE" | tr -d ' ')"
-assert_equals 1 "$(grep -c '"id": "deepseek-developer"' "$TEST_HOME/custom-subagents/state.json")"
-assert_equals 1 "$(grep -c '"id": "volcengine-reviewer"' "$TEST_HOME/custom-subagents/state.json")"
-
-# Reconfiguration is idempotent for registry, workflow markers, and Keychain identity.
-new_case repeated-install
-configure_deepseek
-configure_volcengine
-configure_deepseek
-configure_volcengine
-assert_common
-assert_deepseek_present
-assert_volcengine_present
-assert_equals 2 "$(wc -l <"$FAKE_STATE" | tr -d ' ')"
+# Repeated configuration does not duplicate provider records, profiles, or routes.
+install_deepseek
+install_volcengine
+assert_equals 1 "$(grep -c '"id": "deepseek-agent"' "$TEST_HOME/custom-subagents/state.json")"
+assert_equals 1 "$(grep -c '"id": "volcengine-agent"' "$TEST_HOME/custom-subagents/state.json")"
+assert_equals 1 "$(grep -c 'provider deepseek agent types:' "$TEST_HOME/AGENTS.md")"
+assert_equals 1 "$(grep -c 'provider volcengine agent types:' "$TEST_HOME/AGENTS.md")"
 assert_equals 1 "$(grep -c '<!-- BEGIN custom-subagents managed workflow -->' "$TEST_HOME/AGENTS.md")"
 assert_equals 1 "$(grep -c '<!-- END custom-subagents managed workflow -->' "$TEST_HOME/AGENTS.md")"
-assert_equals 1 "$(grep -c '"id": "deepseek-developer"' "$TEST_HOME/custom-subagents/state.json")"
-assert_equals 1 "$(grep -c '"id": "volcengine-reviewer"' "$TEST_HOME/custom-subagents/state.json")"
-assert_equals 1 "$(grep -c '^model_catalog_json = ' "$TEST_HOME/config.toml")"
 
-printf '%s\n' 'coexistence tests passed'
+printf '%s\n' 'PASS: provider coexistence and routing'

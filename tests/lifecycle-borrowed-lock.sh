@@ -11,10 +11,10 @@ LOCK_HELD=0
 trap '[ "$LOCK_HELD" = 0 ] || custom_subagent_lock_release "$TEST_HOME" >/dev/null 2>&1 || true; rm -rf "$TEMP_ROOT"' EXIT HUP INT TERM
 
 TEST_HOME="$TEMP_ROOT/home"
-PLUGIN_ROOT="$TEMP_ROOT/deepseek-developer"
+PLUGIN_ROOT="$TEMP_ROOT/deepseek-agent"
 mkdir -p "$TEST_HOME" "$PLUGIN_ROOT/.codex-plugin"
 cp "$ROOT/tests/fixtures/config-minimal.toml" "$TEST_HOME/config.toml"
-cp "$ROOT/plugins/deepseek-developer/.codex-plugin/plugin.json" "$PLUGIN_ROOT/.codex-plugin/plugin.json"
+cp "$ROOT/plugins/deepseek-agent/.codex-plugin/plugin.json" "$PLUGIN_ROOT/.codex-plugin/plugin.json"
 cp "$ROOT/tests/fixtures/agent-spec.json" "$PLUGIN_ROOT/agent-spec.json"
 
 run_lifecycle() {
@@ -35,9 +35,12 @@ snapshot_tree() {
 custom_subagent_lock_acquire "$TEST_HOME" >"$TEMP_ROOT/outer-token"
 LOCK_HELD=1
 outer_token=$CUSTOM_SUBAGENT_LOCK_TOKEN
-run_lifecycle install deepseek-developer development deepseek http://localhost:11434 fixture-model
+run_lifecycle install deepseek-agent deepseek http://localhost:11434 fixture-model
 assert_dir "$TEST_HOME/.custom-subagents-lifecycle.lock"
 assert_equals "$outer_token" "$(cat "$TEST_HOME/.custom-subagents-lifecycle.lock/owner")"
+for profile in general developer reviewer; do
+  assert_file "$TEST_HOME/agents/deepseek_$profile.toml"
+done
 
 snapshot_tree "$TEST_HOME" "$TEMP_ROOT/before-busy"
 set +e
@@ -48,7 +51,7 @@ env -u CUSTOM_SUBAGENT_LOCK_TOKEN \
   CUSTOM_SUBAGENT_TEST_MODE=1 \
   CUSTOM_SUBAGENT_TEST_CATALOG_SOURCE="$ROOT/tests/fixtures/models-cache.json" \
   CUSTOM_SUBAGENT_ALLOW_HTTP=1 \
-  sh "$ROOT/shared/lifecycle.sh" uninstall deepseek-developer \
+  sh "$ROOT/shared/lifecycle.sh" uninstall deepseek-agent \
   >"$TEMP_ROOT/busy.out" 2>"$TEMP_ROOT/busy.err"
 busy_status=$?
 set -e
@@ -57,7 +60,7 @@ snapshot_tree "$TEST_HOME" "$TEMP_ROOT/after-busy"
 assert_same_file "$TEMP_ROOT/before-busy" "$TEMP_ROOT/after-busy"
 
 set +e
-CUSTOM_SUBAGENT_LOCK_TOKEN=forged-token run_lifecycle uninstall deepseek-developer \
+CUSTOM_SUBAGENT_LOCK_TOKEN=forged-token run_lifecycle uninstall deepseek-agent \
   >"$TEMP_ROOT/mismatch.out" 2>"$TEMP_ROOT/mismatch.err"
 mismatch_status=$?
 set -e
@@ -82,7 +85,7 @@ CUSTOM_SUBAGENT_AGENT_SPEC="$PLUGIN_ROOT/agent-spec.json" \
 CUSTOM_SUBAGENT_TEST_MODE=1 \
 CUSTOM_SUBAGENT_TEST_CATALOG_SOURCE="$ROOT/tests/fixtures/models-cache.json" \
 CUSTOM_SUBAGENT_ALLOW_HTTP=1 \
-sh "$ROOT/shared/lifecycle.sh" install deepseek-developer development deepseek http://localhost:11434 fixture-model \
+sh "$ROOT/shared/lifecycle.sh" install deepseek-agent deepseek http://localhost:11434 fixture-model \
   >"$TEMP_ROOT/forged.out" 2>"$TEMP_ROOT/forged.err"
 forged_status=$?
 set -e

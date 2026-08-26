@@ -4,7 +4,7 @@ set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 MARKETPLACE="$ROOT/.agents/plugins/marketplace.json"
-PLUGIN_NAMES="deepseek-developer volcengine-reviewer"
+PLUGIN_NAMES="deepseek-agent volcengine-agent"
 
 fail() {
   printf 'FAIL: %s\n' "$1" >&2
@@ -13,6 +13,10 @@ fail() {
 
 assert_file() {
   [ -f "$1" ] || fail "missing file: ${1#$ROOT/}"
+}
+
+assert_dir() {
+  [ -d "$1" ] || fail "missing directory: ${1#$ROOT/}"
 }
 
 assert_json() {
@@ -25,6 +29,15 @@ assert_contains() {
   pattern=$2
   message=$3
   grep -F "$pattern" "$file" >/dev/null 2>&1 || fail "$message"
+}
+
+assert_not_contains() {
+  file=$1
+  pattern=$2
+  message=$3
+  if grep -F "$pattern" "$file" >/dev/null 2>&1; then
+    fail "$message"
+  fi
 }
 
 assert_file "$MARKETPLACE"
@@ -46,7 +59,11 @@ for plugin_name in $PLUGIN_NAMES; do
   assert_contains "$manifest" "\"name\": \"$plugin_name\"" "manifest name mismatch for $plugin_name"
   grep -E '"version"[[:space:]]*:[[:space:]]*"[0-9]+\.[0-9]+\.[0-9]+([+-][^"]+)?"' "$manifest" >/dev/null 2>&1 ||
     fail "manifest version is not semver: $plugin_name"
-  [ -d "$plugin_root/skills" ] || fail "missing skills directory: $plugin_name"
+  assert_dir "$plugin_root/skills"
+  assert_dir "$plugin_root/skills/${plugin_name}-setup"
+  assert_dir "$plugin_root/skills/${plugin_name}-uninstall"
+  assert_contains "$manifest" 'provider profiles' "manifest is not provider-oriented: $plugin_name"
+  assert_not_contains "$manifest" 'fixed-role' "manifest retains fixed-role wording: $plugin_name"
   [ -x "$plugin_root/scripts/configure.sh" ] || fail "configure entrypoint is not executable: $plugin_name"
   [ -x "$plugin_root/scripts/uninstall.sh" ] || fail "uninstall entrypoint is not executable: $plugin_name"
   assert_file "$plugin_root/scripts/runtime-gate.sh"
@@ -74,7 +91,5 @@ for plugin_name in $PLUGIN_NAMES; do
 done
 
 assert_file "$ROOT/scripts/validate-repository.sh"
-sh "$ROOT/scripts/validate-repository.sh"
-assert_contains "$ROOT/README.md" 'one V1 multi-agent protocol' "README missing V1 task boundary"
 
 printf 'PASS: static marketplace validation\n'

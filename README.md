@@ -1,119 +1,116 @@
 # Codex Custom Subagents
 
-A macOS Codex Desktop marketplace for fixed-role custom subagents. GPT remains the main agent. The initial plugins provide DeepSeek for development and Volcengine for independent code review.
+让 Codex 保持 GPT 主智能体，同时使用其他模型作为子智能体：
 
-When custom agents are enabled, the complete task uses one V1 multi-agent protocol. An explicit request for official agents uses official GPT roles inside that same V1 task; switching a running task between V1 and V2 is not supported.
+- `deepseek-agent`：接入 DeepSeek。
+- `volcengine-agent`：接入火山引擎的 OpenAI 兼容模型。
 
-## Current Status
+每个模型都可以执行开发、分析或 Review。GPT 默认根据任务自动选择模型和角色，用户也可以在任务中明确指定。两个插件可以单独安装和卸载。目前仅支持 macOS Codex Desktop。
 
-The marketplace, setup/uninstall skills, shared lifecycle, and isolated
-automated tests are implemented. Local-path marketplace installation of both
-plugins was verified with Codex CLI 0.148.0 in an isolated `CODEX_HOME`. Live
-Keychain dialogs, external provider API calls, GitHub marketplace installation,
-and fresh-task Codex routing still require manual acceptance; this repository
-does not claim those paths have been verified.
+[English](#english)
 
-## Marketplace Layout
+## 安装
 
-- `deepseek-developer`: scoped implementation, code analysis, and focused verification.
-- `volcengine-reviewer`: independent findings-first review. Its generated agent
-  configuration enforces `sandbox_mode = "read-only"` and
-  `approval_policy = "never"` in addition to the review-only instructions.
-
-Each agent is an independent plugin. Installing or removing one must not modify the other agent's files or Keychain entry.
-
-## Installation Shape
-
-After this repository is published as `OWNER/REPOSITORY`:
+添加插件市场：
 
 ```bash
-codex plugin marketplace add OWNER/REPOSITORY --ref main
-codex plugin add deepseek-developer@custom-subagents
-codex plugin add volcengine-reviewer@custom-subagents
+codex plugin marketplace add catlane/codex-custom-subagents --ref main
 ```
 
-Run the two `plugin add` commands sequentially. Configuration and uninstall
-operations share an owner-token lock that covers both Keychain and managed-file
-changes; a concurrent operation fails before either boundary is mutated.
-
-The marketplace command accepts `owner/repo`, an HTTPS Git URL, an SSH Git URL, or a local path. Plugin installation only makes its skills available. Configuration is a separate conversational step so global Codex files are never rewritten silently.
-
-Install only the agents you need. For the GPT-main, DeepSeek-development,
-Volcengine-review workflow, install both packages. In conversation, ask Codex
-to configure each installed plugin and provide only its non-secret endpoint and
-model:
-
-- DeepSeek can use `https://api.deepseek.com` when you accept that default;
-  the model is still required.
-- Volcengine requires the exact OpenAI-compatible endpoint and model or
-  deployment ID. No endpoint or model is guessed.
-
-Codex must show the proposed non-secret settings and obtain approval before
-changing global managed files. Enter a fresh API key only in the native hidden
-macOS dialog. Never paste it into chat. After each successful configuration,
-fully restart Codex and create a fresh task.
-
-## Routing
-
-GPT remains the main model selected in the Codex UI. With both plugins
-configured, non-trivial development can delegate implementation to agent type
-`deepseek_developer`, then send the actual diff and verification evidence to
-the `volcengine_reviewer` for independent findings-first review. The reviewer
-agent is generated with a read-only sandbox and cannot request approval to
-escape it; DeepSeek does not inherit those reviewer-only restrictions.
-
-Configuration snapshots the active official model catalog and changes only
-the currently selected GPT model's `multi_agent_version` to `v1`. It preserves
-all other catalog fields, models, IDs, display names, and ordering.
-
-The complete custom-agent task uses multi-agent V1. A running task cannot mix
-V1 and V2. In a fresh task, an explicit request for "official GPT agents" uses
-official `default`, `worker`, or `explorer` roles in that same V1 task. An
-explicit request for no subagents keeps all work in the GPT main task.
-
-## Uninstall
-
-Ask Codex to run the installed plugin's conversational uninstall skill before
-removing its package. Only after lifecycle and the exact Keychain item are
-cleaned up should Codex run one of:
+按需安装一个或两个插件：
 
 ```bash
-codex plugin remove deepseek-developer@custom-subagents
-codex plugin remove volcengine-reviewer@custom-subagents
+codex plugin add deepseek-agent@custom-subagents
+codex plugin add volcengine-agent@custom-subagents
 ```
 
-Removing one agent preserves the other. If a package was removed first,
-its managed files and Keychain item remain because the cleanup tooling is no
-longer available. Reinstall that same package, run its uninstall skill, and
-remove it again. See
-[`docs/recovery.md`](docs/recovery.md) for status, backup, and fail-closed
-recovery procedures.
+安装插件只会添加配置技能，不会自动修改全局 Codex 配置。
 
-## Development Validation
+## 配置
+
+安装后直接在 Codex 对话中提出配置要求：
+
+```text
+配置 DeepSeek 子智能体，模型使用 deepseek-chat。
+```
+
+```text
+配置火山子智能体，API 地址是 <OpenAI-compatible endpoint>，模型是 <model or endpoint ID>。
+```
+
+Codex 会先展示非敏感配置并请求确认。API Key 只能在 macOS 原生隐藏输入框中填写，不要发送到聊天、命令或配置文件中。配置成功后，完全重启 Codex 并新建任务。
+
+## 使用
+
+GPT 始终是主智能体。每个已配置模型都会提供三个子智能体类型：
+
+- `general`：分析、调查和其他通用任务。
+- `developer`：开发和验证。
+- `reviewer`：独立只读 Review，不能修改文件或申请提升权限。
+
+默认不需要提前绑定角色。例如只配置 DeepSeek 时，可以由一个 DeepSeek 子智能体开发，再由另一个 DeepSeek 子智能体 Review。配置 DeepSeek 和火山后，GPT 可以跨模型分工，也可以根据任务只使用其中一个。
+
+也可以直接指定：
+
+```text
+这次让 DeepSeek 开发，火山 Review。
+```
+
+也可以在新任务中明确要求：
+
+- `使用官方 GPT agent`：使用官方子智能体。
+- `不要使用子智能体`：全部工作由 GPT 主智能体完成。
+
+一个任务不能同时混用 V1 和 V2 子智能体协议。自定义子智能体通过实验性的 V1 model catalog 配置工作，Codex Desktop 更新后应重新验证。
+
+## 卸载
+
+先在 Codex 对话中要求卸载对应子智能体，让插件清理 agent 配置和 Keychain 项；清理成功后再删除插件包：
 
 ```bash
-sh scripts/test-all.sh
+codex plugin remove deepseek-agent@custom-subagents
+codex plugin remove volcengine-agent@custom-subagents
 ```
 
-The runner discovers every top-level `tests/*.sh` suite and gives each one a
-fresh temporary `HOME`, `CODEX_HOME`, `CUSTOM_SUBAGENT_HOME`, and `TMPDIR`. A
-successful run removes its artifacts; a failed run prints and preserves the
-artifact directory and returns non-zero. No development test may read or write
-the live `~/.codex` directory or real macOS Keychain.
+不要先直接删除插件包，否则清理技能也会一起消失。详细恢复方法见 [docs/recovery.md](docs/recovery.md)。
 
-After automated validation, use
-[`docs/manual-acceptance.md`](docs/manual-acceptance.md) for full-restart,
-fresh-V1-task, routing, live-provider authorization, and final-restoration
-acceptance. Recovery procedures remain in
-[`docs/recovery.md`](docs/recovery.md).
+## 更多文档
 
-## Safety
+- [手工验收](docs/manual-acceptance.md)
+- [故障恢复](docs/recovery.md)
 
-- Never paste an API key into Codex chat.
-- Keys are stored only in macOS Keychain.
-- The fixed Keychain account is `api-key`; each plugin has a separate
-  `codex-custom-subagent/<plugin-id>` service.
-- Configuration writes use managed blocks, backups, and rollback.
-- Use the conversational uninstall skill before `codex plugin remove`, because removing the package also removes its cleanup skill.
-- Setup is macOS Codex Desktop only. Automated tests use temporary Codex homes
-  and fake dialogs/Keychain commands; they do not prove live provider access.
+## English
+
+Keep GPT as the main Codex agent while using other models as subagents:
+
+- `deepseek-agent` connects DeepSeek.
+- `volcengine-agent` connects an OpenAI-compatible Volcengine model.
+
+Each configured provider exposes general, developer, and reviewer profiles. GPT selects the provider and role automatically unless the user explicitly assigns them. Reviewer profiles are enforced read-only. Both plugins are independently installable and removable. macOS Codex Desktop is currently required.
+
+### Install
+
+```bash
+codex plugin marketplace add catlane/codex-custom-subagents --ref main
+codex plugin add deepseek-agent@custom-subagents
+codex plugin add volcengine-agent@custom-subagents
+```
+
+After installation, ask Codex to configure each plugin with its non-secret endpoint and model. Enter API keys only in the native hidden macOS dialog. Restart Codex and create a fresh task after configuration.
+
+### Use
+
+GPT remains the main agent. With only DeepSeek configured, separate DeepSeek children can implement and review. With multiple providers, GPT may split roles across models or use one model for both. You can explicitly assign a provider and role, request official GPT agents, or request no subagents.
+
+Custom agents use an experimental V1 model catalog configuration. A single task cannot mix V1 and V2 subagent protocols.
+
+### Uninstall
+
+Ask Codex to run the plugin's uninstall workflow first. Only after managed configuration and the exact Keychain item are removed should you run:
+
+```bash
+codex plugin remove deepseek-agent@custom-subagents
+codex plugin remove volcengine-agent@custom-subagents
+```
+
+See [manual acceptance](docs/manual-acceptance.md) and [recovery](docs/recovery.md) for details.

@@ -14,8 +14,8 @@ Always request conversational cleanup while the plugin is still installed:
 4. Only then remove the package:
 
 ```bash
-codex plugin remove deepseek-developer@custom-subagents
-codex plugin remove volcengine-reviewer@custom-subagents
+codex plugin remove deepseek-agent@custom-subagents
+codex plugin remove volcengine-agent@custom-subagents
 ```
 
 Run only the command for the plugin being removed. Removing one plugin must
@@ -32,7 +32,7 @@ The shared registry is at:
 ```
 
 Ask Codex to run the installed plugin lifecycle's `status` command and report
-only agent ID, role, provider, endpoint, and model. A valid registry contains
+only provider ID, provider, endpoint, and model. A valid registry contains
 only those non-secret settings plus catalog and restoration metadata. Do not
 use `cat`, shell tracing, `security ... -w`, Keychain export, or any command
 that retrieves a password while diagnosing a lifecycle problem.
@@ -40,7 +40,11 @@ that retrieves a password while diagnosing a lifecycle problem.
 The expected managed paths are:
 
 ```text
+~/.codex/agents/deepseek_general.toml
 ~/.codex/agents/deepseek_developer.toml
+~/.codex/agents/deepseek_reviewer.toml
+~/.codex/agents/volcengine_general.toml
+~/.codex/agents/volcengine_developer.toml
 ~/.codex/agents/volcengine_reviewer.toml
 ~/.codex/custom-subagents/base-model-catalog.json
 ~/.codex/custom-subagents/models-v1.json
@@ -51,6 +55,15 @@ The expected managed paths are:
 
 Agent TOML files contain only a Keychain lookup command and item identifiers,
 never the credential value.
+
+## Upgrade From Fixed-Role Package Names
+
+The earlier packages `deepseek-developer` and `volcengine-reviewer` used
+different managed-file and Keychain ownership IDs. They are not migrated in
+place. While each old package is still installed, run its conversational
+uninstall workflow and verify cleanup before installing and configuring
+`deepseek-agent` or `volcengine-agent`. Never keep an old fixed-role
+registration and its renamed provider registration active together.
 
 ## Backups
 
@@ -90,7 +103,7 @@ plugin's lifecycle script or delete the other plugin's Keychain item.
 
 Before manual recovery, fully quit Codex and make a filesystem copy of
 `~/.codex/custom-subagents`, `~/.codex/config.toml`, `~/.codex/AGENTS.md`, and
-the two managed agent TOML files that exist. Copy files without displaying
+the managed agent TOML files that exist. Copy files without displaying
 their contents.
 
 For malformed state, duplicate markers, or a registry/file mismatch, restore
@@ -111,8 +124,8 @@ Keychain recovery is separate from file recovery. The uninstall scripts target
 only these identifiers with account `api-key`:
 
 ```text
-codex-custom-subagent/deepseek-developer
-codex-custom-subagent/volcengine-reviewer
+codex-custom-subagent/deepseek-agent
+codex-custom-subagent/volcengine-agent
 ```
 
 Never inspect or report their stored password. If Keychain deletion fails,

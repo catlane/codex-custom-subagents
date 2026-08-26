@@ -8,9 +8,9 @@ ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 TEMP_ROOT=$(mktemp -d /private/tmp/custom-subagents-production-hooks.XXXXXX)
 trap 'rm -rf "$TEMP_ROOT"' EXIT HUP INT TERM
 
-PLUGIN_ROOT="$TEMP_ROOT/deepseek-developer"
+PLUGIN_ROOT="$TEMP_ROOT/deepseek-agent"
 mkdir -p "$PLUGIN_ROOT/.codex-plugin"
-cp "$ROOT/plugins/deepseek-developer/.codex-plugin/plugin.json" "$PLUGIN_ROOT/.codex-plugin/plugin.json"
+cp "$ROOT/plugins/deepseek-agent/.codex-plugin/plugin.json" "$PLUGIN_ROOT/.codex-plugin/plugin.json"
 cp "$ROOT/tests/fixtures/agent-spec.json" "$PLUGIN_ROOT/agent-spec.json"
 
 snapshot_tree() {
@@ -34,7 +34,7 @@ reject_production_hook() {
     CUSTOM_SUBAGENT_PRODUCTION_MODE=1 \
     "$hook_name=$hook_value" \
     sh "$ROOT/shared/lifecycle.sh" \
-      install deepseek-developer development deepseek https://example.test/v1 fixture-model \
+      install deepseek-agent deepseek https://example.test/v1 fixture-model \
       >"$TEMP_ROOT/$hook_name.out" 2>"$TEMP_ROOT/$hook_name.err"
   hook_status=$?
   set -e
@@ -59,8 +59,11 @@ CUSTOM_SUBAGENT_PLUGIN_ROOT="$PLUGIN_ROOT" \
 CUSTOM_SUBAGENT_AGENT_SPEC="$PLUGIN_ROOT/agent-spec.json" \
 CUSTOM_SUBAGENT_PRODUCTION_MODE=1 \
 sh "$ROOT/shared/lifecycle.sh" \
-  install deepseek-developer development deepseek https://example.test/v1 fixture-model
+  install deepseek-agent deepseek https://example.test/v1 fixture-model
 assert_file "$HTTPS_HOME/custom-subagents/state.json"
+for profile in general developer reviewer; do
+  assert_file "$HTTPS_HOME/agents/deepseek_$profile.toml"
+done
 
 HTTP_HOME="$TEMP_ROOT/http-home"
 mkdir -p "$HTTP_HOME"
@@ -72,7 +75,7 @@ CUSTOM_SUBAGENT_PLUGIN_ROOT="$PLUGIN_ROOT" \
 CUSTOM_SUBAGENT_AGENT_SPEC="$PLUGIN_ROOT/agent-spec.json" \
 CUSTOM_SUBAGENT_PRODUCTION_MODE=1 \
 sh "$ROOT/shared/lifecycle.sh" \
-  install deepseek-developer development deepseek http://localhost:11434 fixture-model \
+  install deepseek-agent deepseek http://localhost:11434 fixture-model \
   >"$TEMP_ROOT/http.out" 2>"$TEMP_ROOT/http.err"
 http_status=$?
 set -e

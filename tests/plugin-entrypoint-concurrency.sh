@@ -21,12 +21,12 @@ cleanup() {
 trap cleanup EXIT HUP INT TERM
 
 MARKETPLACE="$TEMP_ROOT/test-marketplace"
-PLUGIN_ROOT="$MARKETPLACE/plugins/deepseek-developer"
+PLUGIN_ROOT="$MARKETPLACE/plugins/deepseek-agent"
 HELPERS="$MARKETPLACE/tests/helpers"
 CONFIGURE="$PLUGIN_ROOT/scripts/configure.sh"
 UNINSTALL="$PLUGIN_ROOT/scripts/uninstall.sh"
 mkdir -p "$MARKETPLACE/plugins" "$MARKETPLACE/tests" "$HELPERS"
-cp -R "$ROOT/plugins/deepseek-developer" "$PLUGIN_ROOT"
+cp -R "$ROOT/plugins/deepseek-agent" "$PLUGIN_ROOT"
 cp "$ROOT/tests/fixtures/plugin-test-runtime-gate.sh" "$PLUGIN_ROOT/scripts/runtime-gate.sh"
 cp "$ROOT/tests/helpers/blocking-security.sh" "$HELPERS/fake-security.sh"
 cp "$ROOT/tests/helpers/fake-security.sh" "$HELPERS/fake-security-base.sh"
@@ -48,6 +48,7 @@ run_entry() {
   FAKE_DIALOG_SCRIPT_LOG="$DIALOG_LOG" \
   FAKE_DIALOG_VALUE=fixture-secret \
   BLOCK_SECURITY_GATE="${BLOCK_SECURITY_GATE-}" \
+  LEGACY_PREFLIGHT_GATE="${LEGACY_PREFLIGHT_GATE-}" \
   /bin/sh "$entry" "$@"
 }
 
@@ -64,6 +65,34 @@ new_case() {
   : >"$FAKE_STATE"
   : >"$FAKE_LOG"
   : >"$DIALOG_LOG"
+}
+
+snapshot_tree() {
+  find "$1" -type f -exec cksum {} \; | sed "s|$1||" | sort >"$2"
+  find "$1" -type d | sed "s|$1||" | sort >>"$2"
+}
+
+write_other_provider_legacy_residue() {
+  mkdir -p "$TEST_HOME/custom-subagents" "$TEST_HOME/agents"
+  printf '%s\n' '{"agents":[{"id":"volcengine-reviewer"}]}' \
+    >"$TEST_HOME/custom-subagents/state.json"
+  cat >"$TEST_HOME/agents/volcengine_reviewer.toml" <<'EOF'
+# BEGIN custom-subagents managed agent id=volcengine-reviewer plugin=volcengine-reviewer
+# END custom-subagents managed agent id=volcengine-reviewer plugin=volcengine-reviewer
+EOF
+}
+
+assert_legacy_preflight_left_no_mutation() {
+  assert_equals 0 "$(wc -l <"$FAKE_STATE" | tr -d ' ')"
+  assert_equals 0 "$(wc -c <"$FAKE_LOG" | tr -d ' ')"
+  assert_equals 0 "$(wc -c <"$DIALOG_LOG" | tr -d ' ')"
+  assert_same_file "$ROOT/tests/fixtures/config-minimal.toml" "$TEST_HOME/config.toml"
+  assert_not_file "$TEST_HOME/custom-subagents/models-v1.json"
+  assert_not_file "$TEST_HOME/custom-subagents/base-model-catalog.json"
+  assert_not_file "$TEST_HOME/agents/deepseek_general.toml"
+  assert_not_file "$TEST_HOME/agents/deepseek_developer.toml"
+  assert_not_file "$TEST_HOME/agents/deepseek_reviewer.toml"
+  assert_not_file "$TEST_HOME/AGENTS.md"
 }
 
 wait_for_gate() {
@@ -100,6 +129,26 @@ finish_blocked_configure() {
   FIRST_PID=
 }
 
+start_legacy_preflight_gate() {
+  LEGACY_PREFLIGHT_GATE="$GATE"
+  export LEGACY_PREFLIGHT_GATE
+  run_entry "$CONFIGURE" --model deepseek-chat \
+    >"$CASE_ROOT/legacy.out" 2>"$CASE_ROOT/legacy.err" &
+  FIRST_PID=$!
+  unset LEGACY_PREFLIGHT_GATE
+  wait_for_gate
+}
+
+finish_legacy_preflight_gate() {
+  : >"$GATE.release"
+  set +e
+  wait "$FIRST_PID"
+  legacy_status=$?
+  set -e
+  FIRST_PID=
+  assert_equals 1 "$legacy_status"
+}
+
 # A second configure must be rejected before any Keychain or lifecycle change.
 new_case configure-configure
 start_blocked_configure
@@ -111,7 +160,10 @@ set -e
 assert_contains "$CASE_ROOT/second.err" 'another lifecycle operation is active'
 finish_blocked_configure
 assert_file "$TEST_HOME/custom-subagents/state.json"
-assert_contains "$FAKE_STATE" 'codex-custom-subagent/deepseek-developer|api-key'
+assert_file "$TEST_HOME/agents/deepseek_general.toml"
+assert_file "$TEST_HOME/agents/deepseek_developer.toml"
+assert_file "$TEST_HOME/agents/deepseek_reviewer.toml"
+assert_contains "$FAKE_STATE" 'codex-custom-subagent/deepseek-agent|api-key'
 assert_not_file "$TEST_HOME/.custom-subagents-lifecycle.lock"
 
 # Uninstall must not interleave while configure owns the Keychain/lifecycle transaction.
@@ -126,8 +178,48 @@ set -e
 assert_contains "$CASE_ROOT/uninstall.err" 'another lifecycle operation is active'
 finish_blocked_configure
 assert_file "$TEST_HOME/custom-subagents/state.json"
+assert_file "$TEST_HOME/agents/deepseek_general.toml"
 assert_file "$TEST_HOME/agents/deepseek_developer.toml"
-assert_contains "$FAKE_STATE" 'codex-custom-subagent/deepseek-developer|api-key'
+assert_file "$TEST_HOME/agents/deepseek_reviewer.toml"
+assert_contains "$FAKE_STATE" 'codex-custom-subagent/deepseek-agent|api-key'
 assert_not_file "$TEST_HOME/.custom-subagents-lifecycle.lock"
+
+# Legacy preflight is state-sensitive and must not run before the shared
+# owner-token lock. A busy operation wins without any Keychain or file change.
+new_case legacy-preflight-busy
+write_other_provider_legacy_residue
+. "$PLUGIN_ROOT/scripts/vendor/operation-lock.sh"
+custom_subagent_lock_acquire "$TEST_HOME" >/dev/null
+snapshot_tree "$TEST_HOME" "$CASE_ROOT/busy.before"
+set +e
+run_entry "$CONFIGURE" --model deepseek-chat >"$CASE_ROOT/busy.out" 2>"$CASE_ROOT/busy.err"
+busy_status=$?
+set -e
+assert_equals 75 "$busy_status"
+assert_contains "$CASE_ROOT/busy.err" 'another lifecycle operation is active'
+if grep -F -- 'migration required legacy-plugin=' "$CASE_ROOT/busy.err" >/dev/null 2>&1; then
+  fail 'busy configure ran the legacy migration preflight outside the shared lock'
+fi
+snapshot_tree "$TEST_HOME" "$CASE_ROOT/busy.after"
+assert_same_file "$CASE_ROOT/busy.before" "$CASE_ROOT/busy.after"
+assert_legacy_preflight_left_no_mutation
+custom_subagent_lock_release "$TEST_HOME"
+
+# Hold the transaction immediately after acquiring its shared lock, then add
+# legacy residue from the other provider. The guard must reject it before the
+# dialog, Keychain mutation, or managed lifecycle write can begin.
+new_case legacy-preflight-under-lock
+sed '/OPERATION_LOCK_HELD=1/a\
+  [ -z "${LEGACY_PREFLIGHT_GATE:-}" ] || { : >"$LEGACY_PREFLIGHT_GATE.entered"; while [ ! -e "$LEGACY_PREFLIGHT_GATE.release" ]; do /bin/sleep 0.05; done; }' \
+  "$CONFIGURE" >"$CONFIGURE.gated"
+mv "$CONFIGURE.gated" "$CONFIGURE"
+chmod +x "$CONFIGURE"
+start_legacy_preflight_gate
+write_other_provider_legacy_residue
+finish_legacy_preflight_gate
+assert_equals 'deepseek-agent: migration required legacy-plugin=volcengine-reviewer' \
+  "$(cat "$CASE_ROOT/legacy.err")"
+assert_not_file "$TEST_HOME/.custom-subagents-lifecycle.lock"
+assert_legacy_preflight_left_no_mutation
 
 printf '%s\n' 'PASS: plugin entrypoint concurrency'

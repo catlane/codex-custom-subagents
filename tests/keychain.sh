@@ -14,7 +14,7 @@ FAKE_STATE="$TEMP_ROOT/fake-security-state"
 FAKE_LOG="$CAPTURED/security.log"
 FAKE_DIALOG_SCRIPT_LOG="$CAPTURED/dialog-scripts.log"
 SENTINEL='SECRET_MUST_NOT_APPEAR_7F31'
-AGENT='deepseek-developer'
+AGENT='deepseek-agent'
 SERVICE="codex-custom-subagent/$AGENT"
 
 mkdir -p "$TEST_HOME/custom-subagents/backups" "$CAPTURED"

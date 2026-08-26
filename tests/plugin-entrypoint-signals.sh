@@ -21,12 +21,12 @@ cleanup() {
 trap cleanup EXIT HUP INT TERM
 
 MARKETPLACE="$TEMP_ROOT/test-marketplace"
-PLUGIN_ROOT="$MARKETPLACE/plugins/deepseek-developer"
+PLUGIN_ROOT="$MARKETPLACE/plugins/deepseek-agent"
 HELPERS="$MARKETPLACE/tests/helpers"
 CONFIGURE="$PLUGIN_ROOT/scripts/configure.sh"
 UNINSTALL="$PLUGIN_ROOT/scripts/uninstall.sh"
 mkdir -p "$MARKETPLACE/plugins" "$MARKETPLACE/tests" "$HELPERS"
-cp -R "$ROOT/plugins/deepseek-developer" "$PLUGIN_ROOT"
+cp -R "$ROOT/plugins/deepseek-agent" "$PLUGIN_ROOT"
 cp "$ROOT/tests/fixtures/plugin-test-runtime-gate.sh" "$PLUGIN_ROOT/scripts/runtime-gate.sh"
 cp "$ROOT/tests/helpers/blocking-security.sh" "$HELPERS/fake-security.sh"
 cp "$ROOT/tests/helpers/fake-security.sh" "$HELPERS/fake-security-base.sh"
@@ -157,8 +157,10 @@ ENTRY_PID=$!
 wait_for_gate
 terminate_blocked_entry
 assert_file "$TEST_HOME/custom-subagents/state.json"
+assert_file "$TEST_HOME/agents/deepseek_general.toml"
 assert_file "$TEST_HOME/agents/deepseek_developer.toml"
-assert_contains "$FAKE_STATE" 'codex-custom-subagent/deepseek-developer|api-key'
+assert_file "$TEST_HOME/agents/deepseek_reviewer.toml"
+assert_contains "$FAKE_STATE" 'codex-custom-subagent/deepseek-agent|api-key'
 assert_not_file "$TEST_HOME/.custom-subagents-lifecycle.lock"
 cp "$ROOT/shared/lifecycle.sh" "$PLUGIN_ROOT/scripts/vendor/lifecycle.sh"
 
@@ -183,7 +185,9 @@ run_entry "$CONFIGURE" --model deepseek-chat >/dev/null
 start_blocked_entry "$UNINSTALL" find-generic-password
 terminate_blocked_entry
 assert_not_file "$TEST_HOME/custom-subagents/state.json"
+assert_not_file "$TEST_HOME/agents/deepseek_general.toml"
 assert_not_file "$TEST_HOME/agents/deepseek_developer.toml"
+assert_not_file "$TEST_HOME/agents/deepseek_reviewer.toml"
 assert_equals 0 "$(wc -l <"$FAKE_STATE" | tr -d ' ')"
 assert_not_file "$TEST_HOME/.custom-subagents-lifecycle.lock"
 
