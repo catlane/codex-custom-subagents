@@ -1,0 +1,26 @@
+{
+  "fetched_at": "2026-08-01T00:00:00.000000Z",
+  "etag": "W/\"fixture\"",
+  "client_version": "0.147.0",
+  "models": [
+    {
+      "slug": "gpt-5.6-sol",
+      "id": "official:gpt-5.6-sol",
+      "display_name": "GPT-5.6 SOL",
+      "description": "Selected parent model fixture",
+      "multi_agent_version": "v2",
+      "supported_reasoning_levels": ["medium", "high"]
+    },
+    {
+      "slug": "unrelated-model",
+      "id": "official:unrelated-model",
+      "display_name": "Unrelated Model",
+      "description": "Must remain byte-for-byte equivalent by JSON value",
+      "multi_agent_version": "v2",
+      "metadata": {
+        "family": "fixture",
+        "rank": 7
+      }
+    }
+  ]
+}

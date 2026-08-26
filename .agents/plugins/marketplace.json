@@ -1,0 +1,34 @@
+{
+  "name": "custom-subagents",
+  "interface": {
+    "displayName": "Custom Subagents"
+  },
+  "plugins": [
+    {
+      "name": "deepseek-developer",
+      "source": {
+        "source": "local",
+        "path": "./plugins/deepseek-developer"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL",
+        "products": ["CODEX"]
+      },
+      "category": "Developer Tools"
+    },
+    {
+      "name": "volcengine-reviewer",
+      "source": {
+        "source": "local",
+        "path": "./plugins/volcengine-reviewer"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL",
+        "products": ["CODEX"]
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}

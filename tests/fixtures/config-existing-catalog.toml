@@ -1,0 +1,12 @@
+model_provider = "custom"
+model = "gpt-5.6-sol"
+model_catalog_json = "/Users/example/.codex/cc-switch-model-catalog.json"
+
+[model_providers.custom]
+name = "Example"
+base_url = "https://example.com"
+wire_api = "responses"
+requires_openai_auth = true
+
+[projects."/Users/example/work"]
+trust_level = "trusted"

@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "description": "Fixed custom subagent",
+  "developer_instructions": "Work only on the delegated task. Preserve unrelated changes and run focused verification.",
+  "provider_display_name": "Custom subagent provider",
+  "wire_api": "responses"
+}
