@@ -67,7 +67,7 @@ for plugin_name in $PLUGIN_NAMES; do
   [ -x "$plugin_root/scripts/configure.sh" ] || fail "configure entrypoint is not executable: $plugin_name"
   [ -x "$plugin_root/scripts/uninstall.sh" ] || fail "uninstall entrypoint is not executable: $plugin_name"
   assert_file "$plugin_root/scripts/runtime-gate.sh"
-  for shared_name in keychain.sh lifecycle.sh operation-lock.sh prompt-secret.applescript state.js; do
+  for shared_name in keychain.sh lifecycle.sh operation-lock.sh prompt-secret.js state.js; do
     assert_file "$plugin_root/scripts/vendor/$shared_name"
     cmp -s "$ROOT/shared/$shared_name" "$plugin_root/scripts/vendor/$shared_name" ||
       fail "vendored $shared_name differs from shared source: $plugin_name"

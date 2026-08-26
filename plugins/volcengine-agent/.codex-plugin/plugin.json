@@ -1,6 +1,6 @@
 {
   "name": "volcengine-agent",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Configure Volcengine native provider profiles for general work, development, and read-only review in Codex Desktop.",
   "author": {
     "name": "Catlane"

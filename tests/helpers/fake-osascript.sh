@@ -1,7 +1,12 @@
 #!/bin/sh
 
+[ "${1:-}" = -l ] && [ "${2:-}" = JavaScript ] && [ -n "${3:-}" ] || {
+  printf '%s\n' 'fake-osascript: expected -l JavaScript SCRIPT' >&2
+  exit 64
+}
+
 if [ -n "${FAKE_DIALOG_SCRIPT_LOG:-}" ]; then
-  printf '%s\n' "${1:-}" >>"$FAKE_DIALOG_SCRIPT_LOG"
+  printf '%s\n' "$3" >>"$FAKE_DIALOG_SCRIPT_LOG"
 fi
 
 case "${FAKE_DIALOG_MODE:-accept}" in

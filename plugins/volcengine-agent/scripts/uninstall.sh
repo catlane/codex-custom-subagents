@@ -86,7 +86,7 @@ legacy_registration_id() {
   legacy_agent_marker_id
 }
 
-CUSTOM_SUBAGENT_PROMPT_SECRET_SCRIPT="$VENDOR_DIR/prompt-secret.applescript"
+CUSTOM_SUBAGENT_PROMPT_SECRET_SCRIPT="$VENDOR_DIR/prompt-secret.js"
 . "$VENDOR_DIR/keychain.sh"
 . "$VENDOR_DIR/operation-lock.sh"
 

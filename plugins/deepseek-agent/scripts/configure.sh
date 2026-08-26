@@ -52,7 +52,7 @@ done
 [ -f "$VENDOR_DIR/operation-lock.sh" ] || die 'vendored operation lock is missing'
 [ -f "$VENDOR_DIR/state.js" ] || die 'vendored state helper is missing'
 [ -f "$VENDOR_DIR/keychain.sh" ] || die 'vendored Keychain adapter is missing'
-[ -f "$VENDOR_DIR/prompt-secret.applescript" ] || die 'vendored secret prompt is missing'
+[ -f "$VENDOR_DIR/prompt-secret.js" ] || die 'vendored secret prompt is missing'
 
 /usr/bin/osascript -l JavaScript "$VENDOR_DIR/state.js" validate-provider-input \
   deepseek-agent deepseek "$ENDPOINT" "$MODEL" >/dev/null
@@ -116,7 +116,7 @@ legacy_registration_id() {
 }
 
 # The key is never accepted through argv, environment, or a configuration file.
-CUSTOM_SUBAGENT_PROMPT_SECRET_SCRIPT="$VENDOR_DIR/prompt-secret.applescript"
+CUSTOM_SUBAGENT_PROMPT_SECRET_SCRIPT="$VENDOR_DIR/prompt-secret.js"
 . "$VENDOR_DIR/keychain.sh"
 . "$VENDOR_DIR/operation-lock.sh"
 

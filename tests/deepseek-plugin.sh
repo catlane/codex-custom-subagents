@@ -369,7 +369,7 @@ assert_lock_precedes_legacy_guard configure
 assert_lock_precedes_legacy_guard uninstall
 
 # The plugin must remain self-contained when copied into a marketplace cache.
-for file in lifecycle.sh operation-lock.sh state.js keychain.sh prompt-secret.applescript; do
+for file in lifecycle.sh operation-lock.sh state.js keychain.sh prompt-secret.js; do
   assert_same_file "$ROOT/shared/$file" "$VENDOR/$file"
 done
 
@@ -395,7 +395,7 @@ FAKE_SECURITY_STATE="$STANDALONE_STATE" FAKE_SECURITY_LOG="$STANDALONE_LOG" \
 FAKE_DIALOG_SCRIPT_LOG="$FAKE_DIALOG_SCRIPT_LOG" \
 sh -c 'cd "$1" && sh "$2" --model deepseek-chat' sh "$UNRELATED_CWD" "$COPIED_PLUGIN/scripts/configure.sh" \
   >"$CAPTURED/standalone.out" 2>"$CAPTURED/standalone.err"
-assert_contains "$FAKE_DIALOG_SCRIPT_LOG" "$COPIED_PLUGIN/scripts/vendor/prompt-secret.applescript"
+assert_contains "$FAKE_DIALOG_SCRIPT_LOG" "$COPIED_PLUGIN/scripts/vendor/prompt-secret.js"
 
 FAKE_DIALOG_VALUE=$SENTINEL
 run_configure https://api.deepseek.com deepseek-chat >"$CAPTURED/configure.out" 2>"$CAPTURED/configure.err"

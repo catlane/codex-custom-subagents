@@ -6,7 +6,7 @@ set +x
 
 KEYCHAIN_SECURITY_BIN=${CUSTOM_SUBAGENT_SECURITY_BIN:-/usr/bin/security}
 KEYCHAIN_OSASCRIPT_BIN=${CUSTOM_SUBAGENT_OSASCRIPT_BIN:-/usr/bin/osascript}
-KEYCHAIN_PROMPT_SECRET_SCRIPT=${CUSTOM_SUBAGENT_PROMPT_SECRET_SCRIPT:-shared/prompt-secret.applescript}
+KEYCHAIN_PROMPT_SECRET_SCRIPT=${CUSTOM_SUBAGENT_PROMPT_SECRET_SCRIPT:-shared/prompt-secret.js}
 KEYCHAIN_ACCOUNT=api-key
 
 keychain_service() {
@@ -58,7 +58,7 @@ keychain_delete() {
 keychain_prompt_store() {
   set +x
   keychain_service_name=$(keychain_service "${1:-}") || return 1
-  if keychain_prompt_response=$("$KEYCHAIN_OSASCRIPT_BIN" "$KEYCHAIN_PROMPT_SECRET_SCRIPT" 2>/dev/null); then
+  if keychain_prompt_response=$("$KEYCHAIN_OSASCRIPT_BIN" -l JavaScript "$KEYCHAIN_PROMPT_SECRET_SCRIPT" 2>/dev/null); then
     :
   else
     keychain_prompt_response=
