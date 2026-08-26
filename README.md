@@ -11,6 +11,12 @@
 
 ## 安装
 
+如果终端提示 `zsh: command not found: codex`，先执行下面这一行，再继续使用 `codex`：
+
+```bash
+CODEX_BIN="$(find "/Applications/ChatGPT.app" "/Applications/Codex.app" "$HOME/Applications/ChatGPT.app" "$HOME/Applications/Codex.app" -type f -path '*/Contents/Resources/codex' -perm -111 2>/dev/null | head -n 1)"; if [ -n "$CODEX_BIN" ]; then mkdir -p "$HOME/.local/bin" && ln -sf "$CODEX_BIN" "$HOME/.local/bin/codex" && { grep -qxF 'export PATH="$HOME/.local/bin:$PATH"' "$HOME/.zshrc" 2>/dev/null || echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.zshrc"; } && export PATH="$HOME/.local/bin:$PATH" && codex --version; else echo 'Codex Desktop CLI not found under Applications.'; fi
+```
+
 添加插件市场：
 
 ```bash
@@ -89,6 +95,12 @@ Keep GPT as the main Codex agent while using other models as subagents:
 Each configured provider exposes general, developer, and reviewer profiles. GPT selects the provider and role automatically unless the user explicitly assigns them. Reviewer profiles are enforced read-only. Both plugins are independently installable and removable. macOS Codex Desktop is currently required.
 
 ### Install
+
+If the terminal reports `zsh: command not found: codex`, run this one line first, then continue with `codex`:
+
+```bash
+CODEX_BIN="$(find "/Applications/ChatGPT.app" "/Applications/Codex.app" "$HOME/Applications/ChatGPT.app" "$HOME/Applications/Codex.app" -type f -path '*/Contents/Resources/codex' -perm -111 2>/dev/null | head -n 1)"; if [ -n "$CODEX_BIN" ]; then mkdir -p "$HOME/.local/bin" && ln -sf "$CODEX_BIN" "$HOME/.local/bin/codex" && { grep -qxF 'export PATH="$HOME/.local/bin:$PATH"' "$HOME/.zshrc" 2>/dev/null || echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.zshrc"; } && export PATH="$HOME/.local/bin:$PATH" && codex --version; else echo 'Codex Desktop CLI not found under Applications.'; fi
+```
 
 ```bash
 codex plugin marketplace add catlane/codex-custom-subagents --ref main
