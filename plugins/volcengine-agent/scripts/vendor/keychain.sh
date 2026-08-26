@@ -44,6 +44,41 @@ keychain_delete() {
   return 1
 }
 
+# Hidden terminal fallback for environments where the native dialog cannot
+# appear (VM consoles without GUI access for the agent shell, SSH sessions,
+# sandboxed automation). The secret still never enters argv, the environment,
+# files, or logs: echo is disabled on /dev/tty and the value is piped straight
+# into the same private expect transport. Echo is restored even on signals.
+keychain_prompt_store_tty() {
+  set +x
+  keychain_tty_service_name=${1:-}
+  [ -n "$keychain_tty_service_name" ] || return 1
+  [ -t 0 ] && [ -t 2 ] || return 1
+  (
+    set +x
+    trap '/bin/stty echo 2>/dev/null' EXIT
+    /bin/stty -echo 2>/dev/null || exit 1
+    printf '%s' 'custom-subagents: native dialog unavailable; type the API key (input hidden) and press Return, or press Return alone to cancel: ' >&2
+    IFS= read -r keychain_tty_secret || keychain_tty_secret=
+    /bin/stty echo 2>/dev/null
+    printf '\n' >&2
+    if [ -z "$keychain_tty_secret" ]; then
+      exit 2
+    fi
+    if [ "${#keychain_tty_secret}" -gt 12000 ]; then
+      keychain_tty_secret=
+      printf '%s\n' 'custom-subagents: API key is too long' >&2
+      exit 1
+    fi
+    if printf '%s\n' "$keychain_tty_secret" | /usr/bin/expect "$KEYCHAIN_EXPECT_HELPER" "$keychain_tty_service_name" "$KEYCHAIN_ACCOUNT" >/dev/null 2>&1; then
+      keychain_tty_secret=
+      exit 0
+    fi
+    keychain_tty_secret=
+    exit 1
+  )
+}
+
 keychain_prompt_store() {
   set +x
   keychain_service_name=$(keychain_service "${1:-}") || return 1
@@ -51,9 +86,23 @@ keychain_prompt_store() {
     "$KEYCHAIN_EXPECT_HELPER" "$keychain_service_name" "$KEYCHAIN_ACCOUNT" 2>/dev/null); then
     :
   else
+    # The native dialog could not run at all (for example a VM, SSH, or
+    # sandboxed agent shell without GUI access). Fall back to a hidden
+    # terminal prompt when an interactive terminal is attached.
     keychain_prompt_response=
     keychain_secret=
-    printf '%s\n' "custom-subagents: failed to collect Keychain item service=$keychain_service_name account=$KEYCHAIN_ACCOUNT" >&2
+    keychain_prompt_store_tty "$keychain_service_name" && keychain_tty_status=0 || keychain_tty_status=$?
+    case "$keychain_tty_status" in
+      0)
+        keychain_service_name=
+        return 0
+        ;;
+      2)
+        keychain_service_name=
+        return 2
+        ;;
+    esac
+    printf '%s\n' "custom-subagents: native dialog and terminal prompt are both unavailable service=$keychain_service_name account=$KEYCHAIN_ACCOUNT; run this configure command in an interactive Terminal window" >&2
     keychain_service_name=
     return 1
   fi

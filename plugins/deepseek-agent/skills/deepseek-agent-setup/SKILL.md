@@ -31,7 +31,11 @@ Collect only the non-secret endpoint and model in conversation. Use
 `https://api.deepseek.com` when the user accepts the default endpoint. Do not
 accept, quote, retain, or reuse an API key pasted in chat. State that the
 exposed value cannot be used and that a fresh key must be entered only through
-the native hidden dialog.
+the native hidden dialog. When the dialog cannot appear (a VM, SSH, or a
+sandboxed agent shell without GUI access), the script falls back to a hidden
+terminal prompt instead; if it reports that neither is available, give the
+user the exact configure command to run themselves in an interactive
+Terminal window.
 
 Before changing managed global Codex files, show the intended endpoint and
 model. Explain that one provider registration creates the `deepseek_general`,
@@ -41,9 +45,9 @@ the V1 catalog, workflow block, and provider state under the Codex home. Obtain
 explicit approval, resolve this skill's plugin root, and run its
 `scripts/configure.sh` with `--model` and, when needed, `--endpoint`.
 
-Never put a key in a command, environment variable, user/Codex-provided standard input,
-configuration file, log, JSON, TOML, fixture, or backup. A fresh key enters
-only through the native hidden dialog. The adapter's private pipe into
+Never put a key in a command, environment variable, piped or redirected standard
+input, configuration file, log, JSON, TOML, fixture, or backup. A fresh key enters
+only through the native hidden dialog or its hidden terminal fallback. The adapter's private pipe into
 `/usr/bin/security` is the sole internal implementation detail;
 never expose, imitate, or reuse it.
 

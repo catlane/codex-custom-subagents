@@ -31,7 +31,11 @@ Collect the user's exact OpenAI-compatible endpoint and model or deployment ID
 as non-secret values. Both are required; do not guess or offer defaults.
 Do not accept, quote, retain, or reuse an API key pasted in chat. State that the
 exposed value cannot be used and that a fresh key must be entered only through
-the native hidden dialog.
+the native hidden dialog. When the dialog cannot appear (a VM, SSH, or a
+sandboxed agent shell without GUI access), the script falls back to a hidden
+terminal prompt instead; if it reports that neither is available, give the
+user the exact configure command to run themselves in an interactive
+Terminal window.
 
 Before changing managed global Codex files, show the endpoint and model.
 Explain that one provider registration creates the `volcengine_general`,
@@ -42,8 +46,9 @@ the Codex home. Obtain explicit approval, resolve this skill's plugin root, and
 run `scripts/configure.sh --endpoint URL --model ID`.
 
 The user and Codex must not provide a key through a command, environment
-variable, standard input, config, log, JSON, TOML, fixture, or backup. A fresh
-key enters only through the native hidden dialog. The adapter's private pipe into
+variable, piped or redirected standard input, config, log, JSON, TOML, fixture,
+or backup. A fresh
+key enters only through the native hidden dialog or its hidden terminal fallback. The adapter's private pipe into
 `/usr/bin/security` is the sole internal implementation detail; never
 expose, imitate, or reuse it.
 

@@ -689,7 +689,8 @@ assert_contains "$SETUP_SKILL" 'scripts/vendor/lifecycle.sh" status'
 assert_contains "$SETUP_SKILL" "provider's ID, provider name, endpoint, model"
 assert_contains "$SETUP_SKILL" 'Do not call Keychain, configure, or uninstall.'
 assert_contains "$SETUP_SKILL" 'other restoration'
-assert_contains "$SETUP_SKILL" 'user/Codex-provided standard input'
+assert_contains "$SETUP_SKILL" 'piped or redirected standard'
+assert_contains "$SETUP_SKILL" 'hidden terminal fallback'
 assert_contains "$SETUP_SKILL" "adapter's private pipe"
 assert_contains "$SETUP_SKILL" 'same endpoint'
 assert_contains "$SETUP_SKILL" 'changing only the model is allowed'
