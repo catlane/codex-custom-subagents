@@ -11,10 +11,10 @@
 
 ## 安装
 
-如果终端提示 `zsh: command not found: codex`，先执行下面这一行，再继续使用 `codex`：
+如果终端提示 `zsh: command not found: codex`，先执行下面这一行，再继续使用 `codex`。注意必须用包装脚本而不是符号链接：macOS 上 CLI 按可执行文件所在路径定位应用包内的捆绑资源，经符号链接启动会导致配置加载失败（`failed to load configuration: No such file or directory`）：
 
 ```bash
-CODEX_BIN="$(find "/Applications/ChatGPT.app" "/Applications/Codex.app" "$HOME/Applications/ChatGPT.app" "$HOME/Applications/Codex.app" -type f -path '*/Contents/Resources/codex' -perm -111 2>/dev/null | head -n 1)"; if [ -n "$CODEX_BIN" ]; then mkdir -p "$HOME/.local/bin" && ln -sf "$CODEX_BIN" "$HOME/.local/bin/codex" && { grep -qxF 'export PATH="$HOME/.local/bin:$PATH"' "$HOME/.zshrc" 2>/dev/null || echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.zshrc"; } && export PATH="$HOME/.local/bin:$PATH" && codex --version; else echo 'Codex Desktop CLI not found under Applications.'; fi
+CODEX_BIN="$(find "/Applications/ChatGPT.app" "/Applications/Codex.app" "$HOME/Applications/ChatGPT.app" "$HOME/Applications/Codex.app" -type f -path '*/Contents/Resources/codex' -perm -111 2>/dev/null | head -n 1)"; if [ -n "$CODEX_BIN" ]; then mkdir -p "$HOME/.local/bin" && printf '#!/bin/sh\nexec "%s" "$@"\n' "$CODEX_BIN" > "$HOME/.local/bin/codex" && chmod +x "$HOME/.local/bin/codex" && { grep -qxF 'export PATH="$HOME/.local/bin:$PATH"' "$HOME/.zshrc" 2>/dev/null || echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.zshrc"; } && export PATH="$HOME/.local/bin:$PATH" && codex --version; else echo 'Codex Desktop CLI not found under Applications.'; fi
 ```
 
 添加插件市场：
@@ -96,10 +96,10 @@ Each configured provider exposes general, developer, and reviewer profiles. GPT 
 
 ### Install
 
-If the terminal reports `zsh: command not found: codex`, run this one line first, then continue with `codex`:
+If the terminal reports `zsh: command not found: codex`, run this one line first, then continue with `codex`. It must be a wrapper script, not a symlink: on macOS the CLI locates bundled app resources relative to its executable path, and launching through a symlink breaks configuration loading (`failed to load configuration: No such file or directory`):
 
 ```bash
-CODEX_BIN="$(find "/Applications/ChatGPT.app" "/Applications/Codex.app" "$HOME/Applications/ChatGPT.app" "$HOME/Applications/Codex.app" -type f -path '*/Contents/Resources/codex' -perm -111 2>/dev/null | head -n 1)"; if [ -n "$CODEX_BIN" ]; then mkdir -p "$HOME/.local/bin" && ln -sf "$CODEX_BIN" "$HOME/.local/bin/codex" && { grep -qxF 'export PATH="$HOME/.local/bin:$PATH"' "$HOME/.zshrc" 2>/dev/null || echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.zshrc"; } && export PATH="$HOME/.local/bin:$PATH" && codex --version; else echo 'Codex Desktop CLI not found under Applications.'; fi
+CODEX_BIN="$(find "/Applications/ChatGPT.app" "/Applications/Codex.app" "$HOME/Applications/ChatGPT.app" "$HOME/Applications/Codex.app" -type f -path '*/Contents/Resources/codex' -perm -111 2>/dev/null | head -n 1)"; if [ -n "$CODEX_BIN" ]; then mkdir -p "$HOME/.local/bin" && printf '#!/bin/sh\nexec "%s" "$@"\n' "$CODEX_BIN" > "$HOME/.local/bin/codex" && chmod +x "$HOME/.local/bin/codex" && { grep -qxF 'export PATH="$HOME/.local/bin:$PATH"' "$HOME/.zshrc" 2>/dev/null || echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.zshrc"; } && export PATH="$HOME/.local/bin:$PATH" && codex --version; else echo 'Codex Desktop CLI not found under Applications.'; fi
 ```
 
 ```bash

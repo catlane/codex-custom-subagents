@@ -99,6 +99,97 @@ by hand. Recover in this order:
 Keep the other plugin installed throughout. Do not substitute another
 plugin's lifecycle script or delete the other plugin's Keychain item.
 
+## Every Codex Command Fails To Load Configuration
+
+If every `codex` command fails with `failed to load configuration` and
+`No such file or directory`, but `codex --version` works, check how `codex`
+was put on `PATH` before editing anything.
+
+### Cause 1: `codex` Is Launched Through A Symlink
+
+On macOS the CLI locates bundled app resources (including the default model
+catalog used when `config.toml` has no `model_catalog_json` line) relative to
+its own executable path. `_NSGetExecutablePath` can return the symlink path
+itself, so launching `codex` through a symlink makes that lookup fail and
+configuration loading aborts with `No such file or directory`. Machines whose
+`config.toml` sets `model_catalog_json` never hit the bundled lookup, which is
+why the same symlink can work on one Mac and fail on another.
+
+Confirm by bypassing the symlink:
+
+```bash
+/Applications/ChatGPT.app/Contents/Resources/codex plugin marketplace list
+```
+
+If the direct path works, replace the symlink with a wrapper script (a
+wrapper preserves the real executable path in `argv[0]`):
+
+```bash
+sudo rm "$(which codex)"
+printf '#!/bin/sh\nexec /Applications/ChatGPT.app/Contents/Resources/codex "$@"\n' \
+  | sudo tee /usr/local/bin/codex
+sudo chmod +x /usr/local/bin/codex
+```
+
+Adjust the app path if the CLI was found under `Codex.app` or
+`~/Applications` instead of `/Applications/ChatGPT.app`.
+
+### Cause 2: A Dangling Reference In `config.toml`
+
+If the direct path fails the same way, the CLI cannot read a file or
+directory referenced by `config.toml`. Because loading fails before any
+subcommand runs, even `codex plugin marketplace add` cannot repair the file.
+Two known dangling references with these plugins:
+
+1. A managed `model_catalog_json = "<path>"` line whose file under
+   `~/.codex/custom-subagents/` was deleted by hand or by an interrupted
+   early-version setup.
+2. A `[marketplaces.custom-subagents]` registration whose local clone under
+   `~/.codex/.tmp/marketplaces/custom-subagents` was removed, for example by
+   clearing `~/.codex/.tmp` or deleting plugin caches manually. For
+   `source_type = "git"` marketplaces the `source` value is a URL; the local
+   dependency is that clone directory, not the URL.
+
+Diagnose both:
+
+```bash
+grep -n 'model_catalog_json' ~/.codex/config.toml
+ls -la ~/.codex/.tmp/marketplaces/custom-subagents
+```
+
+Back up the configuration before editing:
+
+```bash
+cp ~/.codex/config.toml ~/.codex/config.toml.bak
+```
+
+If the managed catalog line dangles, remove only that line:
+
+```bash
+/usr/bin/sed -i '' '/^model_catalog_json = /d' ~/.codex/config.toml
+```
+
+If the marketplace clone directory is missing, remove only that marketplace
+section, then add the marketplace again so the CLI re-clones it:
+
+```bash
+awk '
+/^\[marketplaces\.custom-subagents\]/ { skip=1; next }
+/^\[/ { skip=0 }
+!skip
+' ~/.codex/config.toml.bak > ~/.codex/config.toml
+
+codex plugin marketplace add catlane/codex-custom-subagents --ref main
+```
+
+Codex commands work again immediately after the dangling reference is
+removed. If `~/.codex/custom-subagents/state.json` still exists, a partial
+registration remains; with the plugin installed, run its conversational
+uninstall cleanup before configuring again. If neither check prints
+anything, bisect `config.toml`: back it up, test with only the
+`model_provider`/`model` lines, then add sections back in groups until the
+failure returns.
+
 ## Fail-Closed Recovery
 
 Before manual recovery, fully quit Codex and make a filesystem copy of
