@@ -77,16 +77,18 @@ assert_empty_file() {
   [ ! -s "$1" ] || fail "expected empty file: $1"
 }
 
-# Store creates the single required generic-password item and sends the value on stdin.
-printf '%s' "$SENTINEL" | run_keychain keychain_store "$AGENT" >"$CAPTURED/create.out" 2>"$CAPTURED/create.err"
+# The native hidden dialog stores the single required generic-password item itself.
+FAKE_DIALOG_VALUE="$SENTINEL"
+run_keychain keychain_prompt_store "$AGENT" >"$CAPTURED/create.out" 2>"$CAPTURED/create.err"
 assert_empty_file "$CAPTURED/create.out"
 assert_empty_file "$CAPTURED/create.err"
 assert_contains "$FAKE_STATE" "$SERVICE|api-key"
 assert_contains "$FAKE_LOG" "add|$SERVICE|api-key"
 assert_equals 1 "$(wc -l <"$FAKE_STATE" | tr -d ' ')"
 
-# A second store replaces the same item instead of creating a duplicate.
-printf '%s' 'replacement-value' | run_keychain keychain_store "$AGENT" >"$CAPTURED/replace.out" 2>"$CAPTURED/replace.err"
+# A second prompt replaces the same item instead of creating a duplicate.
+FAKE_DIALOG_VALUE='replacement-value'
+run_keychain keychain_prompt_store "$AGENT" >"$CAPTURED/replace.out" 2>"$CAPTURED/replace.err"
 assert_empty_file "$CAPTURED/replace.out"
 assert_empty_file "$CAPTURED/replace.err"
 assert_equals 1 "$(wc -l <"$FAKE_STATE" | tr -d ' ')"
@@ -174,15 +176,20 @@ if grep -F -- "$SENTINEL" "$CAPTURED/failed-dialog.out" "$CAPTURED/failed-dialog
   fail 'failed dialog response survived into later xtrace diagnostics'
 fi
 
-# Backend failures report identifiers only, even when the input is a secret.
-FAKE_SECURITY_FAIL=add-generic-password
+# Backend failures report identifiers only, even when the dialog handled a secret.
+FAKE_DIALOG_MODE=fail-sensitive
 set +e
-printf '%s' "$SENTINEL" | run_keychain keychain_store "$AGENT" >"$CAPTURED/failure.out" 2>"$CAPTURED/failure.err"
+run_keychain keychain_prompt_store "$AGENT" >"$CAPTURED/failure.out" 2>"$CAPTURED/failure.err"
 failure_status=$?
 set -e
-FAKE_SECURITY_FAIL=
+FAKE_DIALOG_MODE=accept
 [ "$failure_status" -ne 0 ] || fail 'injected Keychain store failure was accepted'
 assert_contains "$CAPTURED/failure.err" "service=$SERVICE account=api-key"
+
+# The shell wrapper must never invoke security add-generic-password or receive a secret.
+if grep -F 'add-generic-password' "$ROOT/shared/keychain.sh" >/dev/null 2>&1; then
+  fail 'shell wrapper still invokes interactive security add-generic-password'
+fi
 
 # Search every secret-bearing test surface: all captured streams plus state/config/backups.
 if grep -R -F -- "$SENTINEL" "$CAPTURED" "$FAKE_STATE" "$TEST_HOME/config.toml" "$TEST_HOME/custom-subagents/state.json" "$TEST_HOME/custom-subagents/backups" >/dev/null 2>&1; then

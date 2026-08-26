@@ -8,10 +8,13 @@ runtime_gate_die() {
 custom_subagent_runtime_gate() {
   [ "${CUSTOM_SUBAGENT_SECURITY_BIN+x}" != x ] &&
   [ "${CUSTOM_SUBAGENT_OSASCRIPT_BIN+x}" != x ] &&
+  [ "${CUSTOM_SUBAGENT_EXPECT_HELPER+x}" != x ] &&
+  [ "${CUSTOM_SUBAGENT_PREPARED_CATALOG_DIR+x}" != x ] &&
   [ "${CUSTOM_SUBAGENT_TEST_MODE+x}" != x ] &&
   [ "${CUSTOM_SUBAGENT_TEST_APPROVAL+x}" != x ] &&
   [ "${CUSTOM_SUBAGENT_TEST_CATALOG_SOURCE+x}" != x ] &&
   [ "${CUSTOM_SUBAGENT_TEST_PRIMARY_MODEL+x}" != x ] &&
+  [ "${CUSTOM_SUBAGENT_TEST_CODEX_BIN+x}" != x ] &&
   [ "${CUSTOM_SUBAGENT_FAIL_AFTER_WRITE+x}" != x ] &&
   [ "${CUSTOM_SUBAGENT_ALLOW_HTTP+x}" != x ] ||
     runtime_gate_die 'remove all inherited test-only variables and retry'

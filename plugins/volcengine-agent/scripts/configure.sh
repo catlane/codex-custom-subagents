@@ -54,6 +54,7 @@ done
 [ -f "$VENDOR_DIR/state.js" ] || die 'vendored state helper is missing'
 [ -f "$VENDOR_DIR/keychain.sh" ] || die 'vendored Keychain adapter is missing'
 [ -f "$VENDOR_DIR/prompt-secret.js" ] || die 'vendored secret prompt is missing'
+[ -x "$VENDOR_DIR/store-keychain.exp" ] || die 'vendored Keychain transport is missing'
 
 /usr/bin/osascript -l JavaScript "$VENDOR_DIR/state.js" validate-provider-input \
   volcengine-agent volcengine "$ENDPOINT" "$MODEL" >/dev/null
@@ -118,6 +119,7 @@ legacy_registration_id() {
 
 # The key is never accepted through argv, environment, or a configuration file.
 CUSTOM_SUBAGENT_PROMPT_SECRET_SCRIPT="$VENDOR_DIR/prompt-secret.js"
+CUSTOM_SUBAGENT_EXPECT_HELPER="$VENDOR_DIR/store-keychain.exp"
 . "$VENDOR_DIR/keychain.sh"
 . "$VENDOR_DIR/operation-lock.sh"
 
@@ -125,6 +127,13 @@ OPERATION_LOCK_HELD=0
 OPERATION_LOCK_ACQUIRING=0
 OPERATION_PENDING_SIGNAL=0
 FRESH_CREDENTIAL_WAS_ABSENT=0
+CATALOG_PREP_DIR=
+cleanup_prepared_catalog() {
+  [ -n "$CATALOG_PREP_DIR" ] || return 0
+  rm -f "$CATALOG_PREP_DIR/catalog.json" "$CATALOG_PREP_DIR/source" "$CATALOG_PREP_DIR/kind" "$CATALOG_PREP_DIR/primary"
+  rmdir "$CATALOG_PREP_DIR" 2>/dev/null || true
+  CATALOG_PREP_DIR=
+}
 release_operation_lock() {
   if [ "$OPERATION_LOCK_HELD" = 1 ]; then
     custom_subagent_lock_release "$CODEX_HOME" || return $?
@@ -141,6 +150,7 @@ release_operation_lock() {
 release_operation_lock_on_exit() {
   operation_status=$?
   trap - EXIT HUP INT TERM
+  cleanup_prepared_catalog
   if ! release_operation_lock && [ "$operation_status" = 0 ]; then
     operation_status=1
   fi
@@ -186,6 +196,7 @@ handle_operation_signal() {
   signal_status=$1
   trap - EXIT HUP INT TERM
   cleanup_fresh_credential_on_signal || true
+  cleanup_prepared_catalog
   release_operation_lock || true
   exit "$signal_status"
 }
@@ -213,6 +224,7 @@ if legacy_plugin=$(legacy_registration_id); then
 fi
 
 run_lifecycle() {
+  CUSTOM_SUBAGENT_PREPARED_CATALOG_DIR="$CATALOG_PREP_DIR" \
   CUSTOM_SUBAGENT_HOME="$CODEX_HOME" \
   CUSTOM_SUBAGENT_PLUGIN_ROOT="$PLUGIN_ROOT" \
   CUSTOM_SUBAGENT_AGENT_SPEC="$PLUGIN_ROOT/templates/agent-spec.json" \
@@ -220,6 +232,18 @@ run_lifecycle() {
   CUSTOM_SUBAGENT_PRODUCTION_APPROVAL="$RUNTIME_LIFECYCLE_PRODUCTION_APPROVAL" \
   /bin/sh "$VENDOR_DIR/lifecycle.sh" install volcengine-agent volcengine "$ENDPOINT" "$MODEL"
 }
+
+CATALOG_PREP_DIR=$(mktemp -d "${TMPDIR:-/private/tmp}/custom-subagents-configure.XXXXXX") ||
+  die 'could not create private catalog snapshot directory'
+chmod 700 "$CATALOG_PREP_DIR"
+CATALOG_PREP_DIR=$(CDPATH= cd -P -- "$CATALOG_PREP_DIR" && pwd) ||
+  die 'could not resolve private catalog snapshot directory'
+CUSTOM_SUBAGENT_HOME="$CODEX_HOME" \
+CUSTOM_SUBAGENT_PLUGIN_ROOT="$PLUGIN_ROOT" \
+CUSTOM_SUBAGENT_AGENT_SPEC="$PLUGIN_ROOT/templates/agent-spec.json" \
+CUSTOM_SUBAGENT_PRODUCTION_MODE="$RUNTIME_LIFECYCLE_PRODUCTION_MODE" \
+CUSTOM_SUBAGENT_PRODUCTION_APPROVAL="$RUNTIME_LIFECYCLE_PRODUCTION_APPROVAL" \
+/bin/sh "$VENDOR_DIR/lifecycle.sh" prepare-catalog "$CATALOG_PREP_DIR"
 
 credential_binding_status() {
   binding_state="$CODEX_HOME/custom-subagents/state.json"

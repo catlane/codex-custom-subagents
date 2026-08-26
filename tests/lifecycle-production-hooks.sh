@@ -48,6 +48,7 @@ reject_production_hook() {
 reject_production_hook CUSTOM_SUBAGENT_TEST_MODE 1
 reject_production_hook CUSTOM_SUBAGENT_TEST_CATALOG_SOURCE "$ROOT/tests/fixtures/models-cache.json"
 reject_production_hook CUSTOM_SUBAGENT_TEST_PRIMARY_MODEL gpt-5.6-sol
+reject_production_hook CUSTOM_SUBAGENT_TEST_CODEX_BIN /usr/bin/false
 reject_production_hook CUSTOM_SUBAGENT_ALLOW_HTTP 1
 
 HTTPS_HOME="$TEMP_ROOT/https-home"

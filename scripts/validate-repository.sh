@@ -31,7 +31,7 @@ for plugin_name in deepseek-agent volcengine-agent; do
   [ -x "$plugin_root/scripts/configure.sh" ] || fail "configure entrypoint is not executable for $plugin_name"
   [ -x "$plugin_root/scripts/uninstall.sh" ] || fail "uninstall entrypoint is not executable for $plugin_name"
   [ -f "$plugin_root/scripts/runtime-gate.sh" ] || fail "missing production runtime gate for $plugin_name"
-  for shared_name in keychain.sh lifecycle.sh operation-lock.sh prompt-secret.js state.js; do
+  for shared_name in keychain.sh lifecycle.sh operation-lock.sh prompt-secret.js state.js store-keychain.exp; do
     vendor_file="$plugin_root/scripts/vendor/$shared_name"
     [ -f "$vendor_file" ] || fail "missing vendored $shared_name for $plugin_name"
     cmp -s "$ROOT/shared/$shared_name" "$vendor_file" ||

@@ -1,0 +1,4 @@
+interface:
+  display_name: "配置火山引擎子智能体"
+  short_description: "配置或检查火山引擎提供商及其通用、开发和审查子智能体"
+  default_prompt: "使用 $volcengine-agent-setup 配置或检查我的火山引擎子智能体。"

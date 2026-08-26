@@ -1,0 +1,48 @@
+#!/usr/bin/expect -f
+
+log_user 0
+set timeout 20
+
+if {$argc != 2} {
+  exit 64
+}
+
+set service [lindex $argv 0]
+set account [lindex $argv 1]
+if {![regexp {^codex-custom-subagent/[A-Za-z0-9-]+$} $service] || $account ne "api-key"} {
+  exit 64
+}
+
+if {[gets stdin secret] < 0 || $secret eq ""} {
+  exit 65
+}
+
+set command [list /usr/bin/security add-generic-password]
+lappend command -U -s $service -a $account -w
+
+spawn {*}$command
+set prompt_count 0
+expect {
+  -re {password data for new item:[ ]*$} {
+    incr prompt_count
+    send -- "$secret\r"
+    exp_continue
+  }
+  -re {retype password for new item:[ ]*$} {
+    incr prompt_count
+    send -- "$secret\r"
+    exp_continue
+  }
+  eof {
+    set result [wait]
+    set secret ""
+    if {$prompt_count < 1} {
+      exit 66
+    }
+    exit [lindex $result 3]
+  }
+  timeout {
+    set secret ""
+    exit 124
+  }
+}

@@ -46,7 +46,7 @@ function stateAt(path, requireReadable) {
   ["catalog_path", "base_catalog_path", "base_catalog_source"].forEach(function (key) {
     if (typeof state[key] !== "string" || state[key].charAt(0) !== "/") fail("invalid state registry path");
   });
-  if (["config", "default-cache", "test-override"].indexOf(state.base_catalog_source_kind) === -1) {
+  if (["config", "default-cache", "test-override", "codex-bundled"].indexOf(state.base_catalog_source_kind) === -1) {
     fail("invalid base catalog source kind");
   }
   validateScalar(state.primary_model, "primary model");
@@ -316,7 +316,7 @@ function updateState(path, providerJson, catalogPath, baseCatalogPath, baseCatal
   [catalogPath, baseCatalogPath, baseCatalogSource].forEach(function (value) {
     if (typeof value !== "string" || value.charAt(0) !== "/") fail("invalid lifecycle path");
   });
-  if (["config", "default-cache", "test-override"].indexOf(baseCatalogSourceKind) === -1) fail("invalid base catalog source kind");
+  if (["config", "default-cache", "test-override", "codex-bundled"].indexOf(baseCatalogSourceKind) === -1) fail("invalid base catalog source kind");
   validateScalar(primaryModel, "primary model");
   if (["absent", "empty", "ends-newline", "no-final-newline"].indexOf(initialConfigShape) === -1) fail("invalid initial config shape");
   return state;

@@ -1,0 +1,4 @@
+interface:
+  display_name: "卸载火山引擎子智能体"
+  short_description: "安全移除火山引擎提供商、三个子智能体、插件包及其配置"
+  default_prompt: "使用 $volcengine-agent-uninstall 卸载我的火山引擎子智能体。"

@@ -62,12 +62,14 @@ for plugin_name in $PLUGIN_NAMES; do
   assert_dir "$plugin_root/skills"
   assert_dir "$plugin_root/skills/${plugin_name}-setup"
   assert_dir "$plugin_root/skills/${plugin_name}-uninstall"
-  assert_contains "$manifest" 'provider profiles' "manifest is not provider-oriented: $plugin_name"
+  assert_contains "$manifest" '"provider"' "manifest is not provider-oriented: $plugin_name"
+  assert_contains "$manifest" '"developerName": "猫巷"' "manifest developer is not localized: $plugin_name"
+  assert_contains "$manifest" '"websiteURL": "https://github.com/catlane/codex-custom-subagents"' "manifest website is missing: $plugin_name"
   assert_not_contains "$manifest" 'fixed-role' "manifest retains fixed-role wording: $plugin_name"
   [ -x "$plugin_root/scripts/configure.sh" ] || fail "configure entrypoint is not executable: $plugin_name"
   [ -x "$plugin_root/scripts/uninstall.sh" ] || fail "uninstall entrypoint is not executable: $plugin_name"
   assert_file "$plugin_root/scripts/runtime-gate.sh"
-  for shared_name in keychain.sh lifecycle.sh operation-lock.sh prompt-secret.js state.js; do
+  for shared_name in keychain.sh lifecycle.sh operation-lock.sh prompt-secret.js state.js store-keychain.exp; do
     assert_file "$plugin_root/scripts/vendor/$shared_name"
     cmp -s "$ROOT/shared/$shared_name" "$plugin_root/scripts/vendor/$shared_name" ||
       fail "vendored $shared_name differs from shared source: $plugin_name"

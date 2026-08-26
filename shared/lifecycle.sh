@@ -15,6 +15,8 @@ LOCK_OWNED=0
 LOCK_BORROWED=0
 LOCK_ACQUIRING=0
 LOCK_PENDING_SIGNAL=0
+GENERATED_CATALOG_DIR=
+GENERATED_CATALOG_FILE=
 die() { printf '%s\n' "custom-subagents: $1" >&2; exit 1; }
 require_home() {
   SUBAGENT_HOME=${CUSTOM_SUBAGENT_HOME:-}
@@ -27,6 +29,7 @@ require_home() {
     [ "${CUSTOM_SUBAGENT_TEST_MODE+x}" != x ] &&
     [ "${CUSTOM_SUBAGENT_TEST_CATALOG_SOURCE+x}" != x ] &&
     [ "${CUSTOM_SUBAGENT_TEST_PRIMARY_MODEL+x}" != x ] &&
+    [ "${CUSTOM_SUBAGENT_TEST_CODEX_BIN+x}" != x ] &&
     [ "${CUSTOM_SUBAGENT_ALLOW_HTTP+x}" != x ] ||
       die "test hooks are forbidden in production mode"
   fi
@@ -50,12 +53,16 @@ require_home() {
   [ -f "$OPERATION_LOCK_SH" ] || die "operation lock helper is missing"
   TEST_CATALOG_SOURCE=
   TEST_PRIMARY_MODEL=
+  PREPARED_CATALOG_DIR=${CUSTOM_SUBAGENT_PREPARED_CATALOG_DIR:-}
   if [ "${CUSTOM_SUBAGENT_TEST_MODE:-}" = 1 ]; then
     TEST_CATALOG_SOURCE=${CUSTOM_SUBAGENT_TEST_CATALOG_SOURCE:-}
     TEST_PRIMARY_MODEL=${CUSTOM_SUBAGENT_TEST_PRIMARY_MODEL:-}
+    TEST_CODEX_BIN=${CUSTOM_SUBAGENT_TEST_CODEX_BIN:-}
   else
     [ -z "${CUSTOM_SUBAGENT_TEST_CATALOG_SOURCE:-}" ] || die "test catalog override requires CUSTOM_SUBAGENT_TEST_MODE=1"
     [ -z "${CUSTOM_SUBAGENT_TEST_PRIMARY_MODEL:-}" ] || die "test primary model override requires CUSTOM_SUBAGENT_TEST_MODE=1"
+    [ -z "${CUSTOM_SUBAGENT_TEST_CODEX_BIN:-}" ] || die "test Codex binary override requires CUSTOM_SUBAGENT_TEST_MODE=1"
+    TEST_CODEX_BIN=
   fi
 }
 jxa() { /usr/bin/osascript -l JavaScript "$STATE_JS" "$@"; }
@@ -88,15 +95,23 @@ release_lock() {
     LOCK_ACQUIRING=0
   fi
 }
+cleanup_generated_catalog() {
+  if [ -n "$GENERATED_CATALOG_FILE" ]; then rm -f "$GENERATED_CATALOG_FILE"; fi
+  if [ -n "$GENERATED_CATALOG_DIR" ]; then rmdir "$GENERATED_CATALOG_DIR" 2>/dev/null || true; fi
+  GENERATED_CATALOG_FILE=
+  GENERATED_CATALOG_DIR=
+}
 release_lock_on_exit() {
   status=$?
   trap - EXIT HUP INT TERM
+  cleanup_generated_catalog
   if ! release_lock && [ "$status" = 0 ]; then status=1; fi
   exit "$status"
 }
 release_lock_on_signal() {
   status=$1
   trap - EXIT HUP INT TERM
+  cleanup_generated_catalog
   release_lock || true
   exit "$status"
 }
@@ -154,6 +169,7 @@ rollback() {
   status=$1
   [ "$COMMITTED" = 1 ] || restore_backups
   trap - EXIT HUP INT TERM
+  cleanup_generated_catalog
   if ! release_lock && [ "$status" = 0 ]; then status=1; fi
   exit "$status"
 }
@@ -203,6 +219,96 @@ validate_agent_file() {
 }
 validate_endpoint() {
   jxa validate-endpoint "$1" >/dev/null
+}
+codex_catalog_binary() {
+  if [ -n "$TEST_CODEX_BIN" ]; then
+    [ -f "$TEST_CODEX_BIN" ] && [ ! -L "$TEST_CODEX_BIN" ] && [ -x "$TEST_CODEX_BIN" ] ||
+      die "test Codex binary must be an executable regular file"
+    printf '%s\n' "$TEST_CODEX_BIN"
+    return
+  fi
+  for codex_candidate in \
+    /Applications/ChatGPT.app/Contents/Resources/codex \
+    /Applications/Codex.app/Contents/Resources/codex \
+    "$HOME/Applications/ChatGPT.app/Contents/Resources/codex" \
+    "$HOME/Applications/Codex.app/Contents/Resources/codex"
+  do
+    if [ -f "$codex_candidate" ] && [ ! -L "$codex_candidate" ] && [ -x "$codex_candidate" ]; then
+      printf '%s\n' "$codex_candidate"
+      return
+    fi
+  done
+  die "Codex model cache is missing and no Codex Desktop CLI was found"
+}
+generate_bundled_catalog() {
+  codex_binary=$(codex_catalog_binary)
+  GENERATED_CATALOG_DIR=$(mktemp -d "${TMPDIR:-/private/tmp}/custom-subagents-catalog.XXXXXX") ||
+    die "could not create private model catalog directory"
+  chmod 700 "$GENERATED_CATALOG_DIR"
+  GENERATED_CATALOG_FILE="$GENERATED_CATALOG_DIR/models.json"
+  if ! "$codex_binary" debug models --bundled >"$GENERATED_CATALOG_FILE" 2>/dev/null; then
+    die "Codex Desktop could not provide its bundled model catalog"
+  fi
+  chmod 600 "$GENERATED_CATALOG_FILE"
+  base_catalog_source=$codex_binary
+  base_catalog_source_kind=codex-bundled
+  base_catalog_input=$GENERATED_CATALOG_FILE
+}
+prepare_catalog() {
+  [ "$#" = 1 ] || die "prepare-catalog requires an output directory"
+  prepared_output=$1
+  case "$prepared_output" in /*) ;; *) die "prepared catalog directory must be absolute" ;; esac
+  [ -d "$prepared_output" ] && [ ! -L "$prepared_output" ] || die "prepared catalog directory must be a regular directory"
+  [ "$(cd -P "$prepared_output" && pwd)" = "$prepared_output" ] || die "prepared catalog directory must not contain symlinks"
+  [ "$(/usr/bin/stat -f %Lp "$prepared_output")" = 700 ] || die "prepared catalog directory must have mode 700"
+  for prepared_name in catalog.json source kind primary; do
+    [ ! -e "$prepared_output/$prepared_name" ] && [ ! -L "$prepared_output/$prepared_name" ] ||
+      die "prepared catalog output must be empty"
+  done
+
+  state_file="$SUBAGENT_HOME/custom-subagents/state.json"
+  if [ -f "$state_file" ]; then
+    primary_model=$(jxa primary-model "$state_file")
+    base_catalog_input="$SUBAGENT_HOME/custom-subagents/base-model-catalog.json"
+    base_catalog_source=$(jxa base-catalog-source "$state_file")
+    base_catalog_source_kind=$(jxa base-catalog-source-kind "$state_file")
+  else
+    config_file="$SUBAGENT_HOME/config.toml"
+    primary_model=$(jxa config-primary "$config_file" "$TEST_PRIMARY_MODEL")
+    base_catalog_source=$(jxa config-catalog-source "$config_file" "$SUBAGENT_HOME/models_cache.json" "$TEST_CATALOG_SOURCE" "$TEST_PRIMARY_MODEL")
+    base_catalog_source_kind=$(jxa config-catalog-source-kind "$config_file" "$TEST_CATALOG_SOURCE" "$TEST_PRIMARY_MODEL")
+    base_catalog_input=$base_catalog_source
+    if [ "$base_catalog_source_kind" = default-cache ] && [ ! -f "$base_catalog_source" ]; then
+      generate_bundled_catalog
+    fi
+  fi
+  jxa validate-base-catalog "$base_catalog_input" "$primary_model" >/dev/null
+  cp "$base_catalog_input" "$prepared_output/catalog.json"
+  printf '%s\n' "$base_catalog_source" >"$prepared_output/source"
+  printf '%s\n' "$base_catalog_source_kind" >"$prepared_output/kind"
+  printf '%s\n' "$primary_model" >"$prepared_output/primary"
+  chmod 600 "$prepared_output/catalog.json" "$prepared_output/source" "$prepared_output/kind" "$prepared_output/primary"
+}
+
+load_prepared_catalog() {
+  [ -n "$PREPARED_CATALOG_DIR" ] || return 1
+  case "$PREPARED_CATALOG_DIR" in /*) ;; *) die "prepared catalog directory must be absolute" ;; esac
+  [ -d "$PREPARED_CATALOG_DIR" ] && [ ! -L "$PREPARED_CATALOG_DIR" ] || die "prepared catalog directory is missing or unsafe"
+  [ "$(cd -P "$PREPARED_CATALOG_DIR" && pwd)" = "$PREPARED_CATALOG_DIR" ] || die "prepared catalog directory must not contain symlinks"
+  [ "$(/usr/bin/stat -f %Lp "$PREPARED_CATALOG_DIR")" = 700 ] || die "prepared catalog directory must have mode 700"
+  for prepared_name in catalog.json source kind primary; do
+    [ -f "$PREPARED_CATALOG_DIR/$prepared_name" ] && [ ! -L "$PREPARED_CATALOG_DIR/$prepared_name" ] ||
+      die "prepared catalog snapshot is missing or unsafe"
+  done
+  base_catalog_input="$PREPARED_CATALOG_DIR/catalog.json"
+  base_catalog_source=$(cat "$PREPARED_CATALOG_DIR/source")
+  base_catalog_source_kind=$(cat "$PREPARED_CATALOG_DIR/kind")
+  prepared_primary=$(cat "$PREPARED_CATALOG_DIR/primary")
+  case "$base_catalog_source" in /*) ;; *) die "prepared catalog source must be absolute" ;; esac
+  case "$base_catalog_source_kind" in config|default-cache|test-override|codex-bundled) ;; *) die "invalid prepared catalog source kind" ;; esac
+  [ "$prepared_primary" = "$primary_model" ] || die "prepared catalog primary model changed before install"
+  jxa validate-base-catalog "$base_catalog_input" "$primary_model" >/dev/null
+  return 0
 }
 config_catalog_line() {
   [ -f "$1" ] || return 0
@@ -377,9 +483,15 @@ install() {
   else
     initial_config_shape=$(jxa config-shape "$config_file" "$TEST_PRIMARY_MODEL")
     original_json=$(jxa config-original-catalog-line-json "$config_file" "$TEST_PRIMARY_MODEL")
-    base_catalog_source=$(jxa config-catalog-source "$config_file" "$SUBAGENT_HOME/models_cache.json" "$TEST_CATALOG_SOURCE" "$TEST_PRIMARY_MODEL")
-    base_catalog_source_kind=$(jxa config-catalog-source-kind "$config_file" "$TEST_CATALOG_SOURCE" "$TEST_PRIMARY_MODEL")
-    jxa validate-base-catalog "$base_catalog_source" "$primary_model" >/dev/null
+    if ! load_prepared_catalog; then
+      base_catalog_source=$(jxa config-catalog-source "$config_file" "$SUBAGENT_HOME/models_cache.json" "$TEST_CATALOG_SOURCE" "$TEST_PRIMARY_MODEL")
+      base_catalog_source_kind=$(jxa config-catalog-source-kind "$config_file" "$TEST_CATALOG_SOURCE" "$TEST_PRIMARY_MODEL")
+      base_catalog_input=$base_catalog_source
+      if [ "$base_catalog_source_kind" = default-cache ] && [ ! -f "$base_catalog_source" ]; then
+        generate_bundled_catalog
+      fi
+      jxa validate-base-catalog "$base_catalog_input" "$primary_model" >/dev/null
+    fi
   fi
   keychain_service="codex-custom-subagent/$provider_id"
   rendered_general=$(jxa render-agent-spec-args "$CANONICAL_AGENT_SPEC" "$provider_id" general "$provider" "$endpoint" "$model" "$catalog_file" "$keychain_service")
@@ -398,7 +510,7 @@ install() {
   { printf '%s\n' "# BEGIN custom-subagents managed agent provider=$provider_id role=general plugin=$plugin_name"; printf '%s\n' "$rendered_general"; printf '%s\n' "# END custom-subagents managed agent provider=$provider_id role=general plugin=$plugin_name"; } >"$temp_dir/general.toml"
   { printf '%s\n' "# BEGIN custom-subagents managed agent provider=$provider_id role=developer plugin=$plugin_name"; printf '%s\n' "$rendered_developer"; printf '%s\n' "# END custom-subagents managed agent provider=$provider_id role=developer plugin=$plugin_name"; } >"$temp_dir/developer.toml"
   { printf '%s\n' "# BEGIN custom-subagents managed agent provider=$provider_id role=reviewer plugin=$plugin_name"; printf '%s\n' "$rendered_reviewer"; printf '%s\n' "# END custom-subagents managed agent provider=$provider_id role=reviewer plugin=$plugin_name"; } >"$temp_dir/reviewer.toml"
-  if [ "$fresh_install" = 1 ]; then atomic_write "$base_catalog_file" "$base_catalog_source"; fi
+  if [ "$fresh_install" = 1 ]; then atomic_write "$base_catalog_file" "$base_catalog_input"; fi
   atomic_write "$general_file" "$temp_dir/general.toml"
   atomic_write "$developer_file" "$temp_dir/developer.toml"
   atomic_write "$reviewer_file" "$temp_dir/reviewer.toml"
@@ -409,7 +521,7 @@ install() {
   jxa render-config-to-file "$config_file" "$catalog_file" "$temp_dir/config.toml" "$TEST_PRIMARY_MODEL"
   atomic_write "$config_file" "$temp_dir/config.toml"
   jxa workflow "$state_file" >"$temp_dir/workflow.md"; render_workflow_file "$workflow_file" "$temp_dir/workflow.md" "$temp_dir/AGENTS.md"; atomic_write "$workflow_file" "$temp_dir/AGENTS.md"
-  rm -rf "$temp_dir"; COMMITTED=1; trap - EXIT HUP INT TERM; release_lock
+  rm -rf "$temp_dir"; COMMITTED=1; cleanup_generated_catalog; trap - EXIT HUP INT TERM; release_lock
 }
 uninstall() {
   [ "$#" = 1 ] || die "uninstall requires a provider ID"
@@ -536,8 +648,9 @@ require_home
 command=${1:-}; shift || true
 case "$command" in
   install) acquire_lock; install "$@" ;;
+  prepare-catalog) acquire_lock; prepare_catalog "$@" ;;
   uninstall) acquire_lock; uninstall "$@" ;;
   validate-registration) acquire_lock; validate_registration "$@" ;;
   status) status "$@" ;;
-  *) die "expected install, uninstall, validate-registration, or status" ;;
+  *) die "expected install, prepare-catalog, uninstall, validate-registration, or status" ;;
 esac

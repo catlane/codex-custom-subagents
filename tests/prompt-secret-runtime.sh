@@ -16,6 +16,13 @@ fail() {
   fail 'prompt-secret.js does not compile as JavaScript for Automation'
 grep -F 'hiddenAnswer: true' "$SCRIPT" >/dev/null 2>&1 ||
   fail 'prompt-secret.js does not request a hidden answer'
+grep -F '/usr/bin/expect' "$SCRIPT" >/dev/null 2>&1 ||
+  fail 'prompt-secret.js does not use the private expect transport'
+grep -F 'standardInput' "$SCRIPT" >/dev/null 2>&1 ||
+  fail 'prompt-secret.js does not provide the secret over a private pipe'
+if grep -F 'ObjC.import("Security")' "$SCRIPT" >/dev/null 2>&1; then
+  fail 'prompt-secret.js retains the incompatible direct Security.framework bridge'
+fi
 
 for plugin_name in deepseek-agent volcengine-agent; do
   vendor="$ROOT/plugins/$plugin_name/scripts/vendor/prompt-secret.js"

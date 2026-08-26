@@ -1,10 +1,13 @@
 {
   "name": "volcengine-agent",
-  "version": "0.1.1",
-  "description": "Configure Volcengine native provider profiles for general work, development, and read-only review in Codex Desktop.",
+  "version": "0.1.2",
+  "description": "在 Codex Desktop 中配置和管理火山引擎通用、开发及只读审查子智能体。",
   "author": {
-    "name": "Catlane"
+    "name": "猫巷",
+    "url": "https://github.com/catlane/codex-custom-subagents"
   },
+  "homepage": "https://github.com/catlane/codex-custom-subagents",
+  "repository": "https://github.com/catlane/codex-custom-subagents",
   "license": "MIT",
   "keywords": [
     "codex",
@@ -15,18 +18,19 @@
   ],
   "skills": "./skills/",
   "interface": {
-    "displayName": "Volcengine Agent",
-    "shortDescription": "Configure Volcengine provider profiles",
-    "longDescription": "Installs and manages Volcengine provider profiles for general work, development, and independent read-only review while keeping GPT as the Codex main agent.",
-    "developerName": "Catlane",
-    "category": "Developer Tools",
+    "displayName": "火山引擎子智能体",
+    "shortDescription": "配置和管理火山引擎子智能体",
+    "longDescription": "在保留 GPT 作为 Codex 主智能体的同时，安装并管理用于通用任务、开发和独立只读审查的火山引擎子智能体。",
+    "developerName": "猫巷",
+    "category": "开发者工具",
     "capabilities": [
-      "Interactive"
+      "交互式"
     ],
+    "websiteURL": "https://github.com/catlane/codex-custom-subagents",
     "defaultPrompt": [
-      "Configure my Volcengine provider agents",
-      "Check the Volcengine provider agent status",
-      "Uninstall my Volcengine provider agents"
+      "配置我的火山引擎子智能体",
+      "检查火山引擎子智能体状态",
+      "卸载我的火山引擎子智能体"
     ]
   }
 }

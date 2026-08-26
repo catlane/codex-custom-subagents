@@ -137,7 +137,7 @@ assert_not_file "$TEST_HOME/.custom-subagents-lifecycle.lock"
 # A signal delivered after lifecycle commit must remain nonzero but must not
 # delete the credential required by the already-committed registration.
 new_case configure-after-lifecycle-commit
-sed 's#COMMITTED=1; trap - EXIT HUP INT TERM; release_lock#COMMITTED=1; [ -z "${LIFECYCLE_POST_COMMIT_GATE:-}" ] || { : >"$LIFECYCLE_POST_COMMIT_GATE.entered"; while [ ! -e "$LIFECYCLE_POST_COMMIT_GATE.release" ]; do /bin/sleep 0.05; done; }; trap - EXIT HUP INT TERM; release_lock#' \
+sed 's#COMMITTED=1; cleanup_generated_catalog; trap - EXIT HUP INT TERM; release_lock#COMMITTED=1; cleanup_generated_catalog; [ -z "${LIFECYCLE_POST_COMMIT_GATE:-}" ] || { : >"$LIFECYCLE_POST_COMMIT_GATE.entered"; while [ ! -e "$LIFECYCLE_POST_COMMIT_GATE.release" ]; do /bin/sleep 0.05; done; }; trap - EXIT HUP INT TERM; release_lock#' \
   "$ROOT/shared/lifecycle.sh" >"$PLUGIN_ROOT/scripts/vendor/lifecycle.sh"
 /usr/bin/env \
   CODEX_HOME="$TEST_HOME" \
