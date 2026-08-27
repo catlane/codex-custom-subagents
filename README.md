@@ -37,7 +37,7 @@ codex plugin add volcengine-agent@custom-subagents
 安装后直接在 Codex 对话中提出配置要求：
 
 ```text
-配置 DeepSeek 子智能体，模型使用 deepseek-chat。
+配置 DeepSeek 子智能体，模型使用 deepseek-v4-flash。
 ```
 
 ```text
