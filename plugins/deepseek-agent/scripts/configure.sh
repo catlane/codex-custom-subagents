@@ -25,7 +25,7 @@ die() {
 }
 
 usage() {
-  printf '%s\n' 'usage: configure.sh [--endpoint URL] --model MODEL' >&2
+  printf '%s\n' 'usage: configure.sh [--endpoint URL] [--model MODEL]' >&2
   exit 64
 }
 
@@ -45,7 +45,6 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-[ -n "$MODEL" ] || usage
 [ -d "$CODEX_HOME" ] || die "CODEX_HOME must be an existing directory"
 [ -f "$PLUGIN_ROOT/templates/agent-spec.json" ] || die 'agent spec is missing'
 [ -f "$VENDOR_DIR/lifecycle.sh" ] || die 'vendored lifecycle is missing'
@@ -53,10 +52,10 @@ done
 [ -f "$VENDOR_DIR/state.js" ] || die 'vendored state helper is missing'
 [ -f "$VENDOR_DIR/keychain.sh" ] || die 'vendored Keychain adapter is missing'
 [ -f "$VENDOR_DIR/prompt-secret.js" ] || die 'vendored secret prompt is missing'
+[ -f "$VENDOR_DIR/model-discovery.sh" ] || die 'vendored model discovery helper is missing'
+[ -f "$VENDOR_DIR/model-discovery.js" ] || die 'vendored model discovery parser is missing'
+[ -f "$VENDOR_DIR/choose-model.js" ] || die 'vendored model chooser is missing'
 [ -x "$VENDOR_DIR/store-keychain.exp" ] || die 'vendored Keychain transport is missing'
-
-/usr/bin/osascript -l JavaScript "$VENDOR_DIR/state.js" validate-provider-input \
-  deepseek-agent deepseek "$ENDPOINT" "$MODEL" >/dev/null
 
 legacy_state_registration_id() {
   legacy_state="$CODEX_HOME/custom-subagents/state.json"
@@ -120,7 +119,11 @@ legacy_registration_id() {
 CUSTOM_SUBAGENT_PROMPT_SECRET_SCRIPT="$VENDOR_DIR/prompt-secret.js"
 CUSTOM_SUBAGENT_EXPECT_HELPER="$VENDOR_DIR/store-keychain.exp"
 . "$VENDOR_DIR/keychain.sh"
+. "$VENDOR_DIR/model-discovery.sh"
 . "$VENDOR_DIR/operation-lock.sh"
+
+MODEL_DISCOVERY_PARSER="$VENDOR_DIR/model-discovery.js"
+MODEL_DISCOVERY_CHOICE_SCRIPT="$VENDOR_DIR/choose-model.js"
 
 OPERATION_LOCK_HELD=0
 OPERATION_LOCK_ACQUIRING=0
@@ -175,21 +178,27 @@ credential_binding_is_committed() {
   set -e
   [ "$committed_lifecycle_status" = 0 ]
 }
-cleanup_fresh_credential_on_signal() {
+cleanup_fresh_credential() {
   [ "$FRESH_CREDENTIAL_WAS_ABSENT" = 1 ] || return 0
   credential_binding_is_committed && return 0
   set +e
   keychain_exists deepseek-agent
-  signal_keychain_status=$?
+  cleanup_keychain_status=$?
   set -e
-  case "$signal_keychain_status" in
+  case "$cleanup_keychain_status" in
     0) keychain_delete deepseek-agent ;;
     44) return 0 ;;
     *)
-      printf '%s\n' "deepseek-agent: interrupted configuration could not inspect Keychain status=$signal_keychain_status service=codex-custom-subagent/deepseek-agent account=api-key; retry uninstall cleanup." >&2
-      return "$signal_keychain_status"
+      printf '%s\n' "deepseek-agent: cleanup could not inspect Keychain status=$cleanup_keychain_status service=codex-custom-subagent/deepseek-agent account=api-key; remove that exact item after resolving Keychain access." >&2
+      return 1
       ;;
   esac
+}
+cleanup_fresh_credential_on_signal() {
+  cleanup_fresh_credential || {
+    printf '%s\n' 'deepseek-agent: interrupted configuration cleanup incomplete; retry uninstall cleanup.' >&2
+    return 1
+  }
 }
 handle_operation_signal() {
   signal_status=$1
@@ -232,18 +241,6 @@ run_lifecycle() {
   /bin/sh "$VENDOR_DIR/lifecycle.sh" install deepseek-agent deepseek "$ENDPOINT" "$MODEL"
 }
 
-CATALOG_PREP_DIR=$(mktemp -d "${TMPDIR:-/private/tmp}/custom-subagents-configure.XXXXXX") ||
-  die 'could not create private catalog snapshot directory'
-chmod 700 "$CATALOG_PREP_DIR"
-CATALOG_PREP_DIR=$(CDPATH= cd -P -- "$CATALOG_PREP_DIR" && pwd) ||
-  die 'could not resolve private catalog snapshot directory'
-CUSTOM_SUBAGENT_HOME="$CODEX_HOME" \
-CUSTOM_SUBAGENT_PLUGIN_ROOT="$PLUGIN_ROOT" \
-CUSTOM_SUBAGENT_AGENT_SPEC="$PLUGIN_ROOT/templates/agent-spec.json" \
-CUSTOM_SUBAGENT_PRODUCTION_MODE="$RUNTIME_LIFECYCLE_PRODUCTION_MODE" \
-CUSTOM_SUBAGENT_PRODUCTION_APPROVAL="$RUNTIME_LIFECYCLE_PRODUCTION_APPROVAL" \
-/bin/sh "$VENDOR_DIR/lifecycle.sh" prepare-catalog "$CATALOG_PREP_DIR"
-
 credential_binding_status() {
   binding_state="$CODEX_HOME/custom-subagents/state.json"
   if [ ! -e "$binding_state" ] && [ ! -L "$binding_state" ]; then
@@ -273,7 +270,7 @@ case "$keychain_lookup_status" in
   0)
     binding_status=$(credential_binding_status)
     case "$binding_status" in
-      match) run_lifecycle ;;
+      match) ;;
       mismatch|absent)
         die 'existing credential endpoint binding is mismatched or unknown service=codex-custom-subagent/deepseek-agent account=api-key; first run the deepseek-agent uninstall cleanup, then configure again and enter a fresh hidden-dialog key'
         ;;
@@ -287,27 +284,98 @@ case "$keychain_lookup_status" in
     set -e
     [ "$prompt_status" = 0 ] || {
       [ "$prompt_status" = 2 ] && exit 2
+      cleanup_fresh_credential || true
       die 'Keychain storage failed'
     }
 
-    set +e
-    run_lifecycle
-    lifecycle_status=$?
-    set -e
-    if [ "$lifecycle_status" -ne 0 ]; then
-      credential_binding_is_committed && exit "$lifecycle_status"
-      # Only the just-created item is safe to remove during rollback.
-      if ! keychain_delete deepseek-agent; then
-        printf '%s\n' 'deepseek-agent: lifecycle failed and Keychain cleanup incomplete service=codex-custom-subagent/deepseek-agent account=api-key; remove that exact item after resolving Keychain access, then rerun cleanup.' >&2
-        exit 1
-      fi
-      exit "$lifecycle_status"
-    fi
     ;;
   *)
     printf '%s\n' "deepseek-agent: Keychain lookup failed status=$keychain_lookup_status service=codex-custom-subagent/deepseek-agent account=api-key; resolve Keychain access and retry." >&2
     exit "$keychain_lookup_status"
     ;;
 esac
+
+if [ -z "$MODEL" ]; then
+  set +e
+  MODEL=$(model_discovery_resolve "$ENDPOINT" deepseek-agent "$MODEL_DISCOVERY_PARSER" "$MODEL_DISCOVERY_CHOICE_SCRIPT")
+  model_discovery_status=$?
+  set -e
+  case "$model_discovery_status" in
+    0) ;;
+    2)
+      cleanup_fresh_credential || true
+      exit 2
+      ;;
+    *)
+      printf '%s\n' 'deepseek-agent: model list could not be loaded; enter the model ID manually.' >&2
+      set +e
+      MODEL=$(model_discovery_prompt_manual)
+      manual_model_status=$?
+      set -e
+      case "$manual_model_status" in
+        0) ;;
+        2)
+          cleanup_fresh_credential || true
+          exit 2
+          ;;
+        *)
+          cleanup_fresh_credential || true
+          printf '%s\n' 'deepseek-agent: automatic model discovery and manual model input are unavailable; rerun with --model MODEL in an interactive Terminal.' >&2
+          exit 78
+          ;;
+      esac
+      ;;
+  esac
+fi
+
+set +e
+/usr/bin/osascript -l JavaScript "$VENDOR_DIR/state.js" validate-provider-input \
+  deepseek-agent deepseek "$ENDPOINT" "$MODEL" >/dev/null
+provider_input_status=$?
+set -e
+[ "$provider_input_status" = 0 ] || {
+  cleanup_fresh_credential || true
+  exit "$provider_input_status"
+}
+
+CATALOG_PREP_DIR=$(mktemp -d "${TMPDIR:-/private/tmp}/custom-subagents-configure.XXXXXX") || {
+  cleanup_fresh_credential || true
+  die 'could not create private catalog snapshot directory'
+}
+chmod 700 "$CATALOG_PREP_DIR" || {
+  cleanup_fresh_credential || true
+  die 'could not secure private catalog snapshot directory'
+}
+CATALOG_PREP_DIR=$(CDPATH= cd -P -- "$CATALOG_PREP_DIR" && pwd) || {
+  cleanup_fresh_credential || true
+  die 'could not resolve private catalog snapshot directory'
+}
+set +e
+CUSTOM_SUBAGENT_HOME="$CODEX_HOME" \
+CUSTOM_SUBAGENT_PLUGIN_ROOT="$PLUGIN_ROOT" \
+CUSTOM_SUBAGENT_AGENT_SPEC="$PLUGIN_ROOT/templates/agent-spec.json" \
+CUSTOM_SUBAGENT_PRODUCTION_MODE="$RUNTIME_LIFECYCLE_PRODUCTION_MODE" \
+CUSTOM_SUBAGENT_PRODUCTION_APPROVAL="$RUNTIME_LIFECYCLE_PRODUCTION_APPROVAL" \
+/bin/sh "$VENDOR_DIR/lifecycle.sh" prepare-catalog "$CATALOG_PREP_DIR"
+catalog_prepare_status=$?
+set -e
+[ "$catalog_prepare_status" = 0 ] || {
+  cleanup_fresh_credential || true
+  exit "$catalog_prepare_status"
+}
+
+set +e
+run_lifecycle
+lifecycle_status=$?
+set -e
+if [ "$lifecycle_status" -ne 0 ]; then
+  credential_binding_is_committed && exit "$lifecycle_status"
+  # Only the just-created item is safe to remove during rollback.
+  if ! cleanup_fresh_credential; then
+    printf '%s\n' 'deepseek-agent: lifecycle failed and Keychain cleanup incomplete service=codex-custom-subagent/deepseek-agent account=api-key; remove that exact item after resolving Keychain access, then rerun cleanup.' >&2
+    exit 1
+  fi
+  exit "$lifecycle_status"
+fi
 
 printf '%s\n' 'DeepSeek provider configured with general, developer, and reviewer profiles. Restart Codex and begin a fresh task.'

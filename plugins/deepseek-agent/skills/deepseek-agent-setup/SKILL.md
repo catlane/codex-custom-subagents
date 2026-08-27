@@ -27,7 +27,7 @@ metadata. If this provider is not registered, say so without starting setup.
 
 ## Configuration
 
-Collect only the non-secret endpoint and model in conversation. When
+Collect the non-secret endpoint in conversation; the model is optional. When
 `--endpoint` is omitted, use the official default `https://api.deepseek.com`.
 If the user explicitly requests a relay or another endpoint, pass that
 non-secret value with `--endpoint`. Do not accept, quote, retain, or reuse an
@@ -38,13 +38,20 @@ access), the script falls back to a hidden terminal prompt instead; if it
 reports that neither is available, give the user the exact configure command
 to run themselves in an interactive Terminal window.
 
-Before changing managed global Codex files, show the intended endpoint and
-model. Explain that one provider registration creates the `deepseek_general`,
+After the key is entered, `scripts/configure.sh` requests `GET /models` from
+the selected endpoint. On macOS it presents a native model chooser; in a VM,
+SSH session, or other headless environment it uses terminal selection. If the
+endpoint does not support model listing or returns an unusable response, it
+falls back to manual model input. `--model MODEL` remains available for that
+fallback and for automation. Before changing managed global Codex files, show
+the intended endpoint and selected model. Explain that one provider
+registration creates the `deepseek_general`,
 `deepseek_developer`, and `deepseek_reviewer` profiles, which share the same
 endpoint, model, and Keychain credential. The managed lifecycle also updates
 the V1 catalog, workflow block, and provider state under the Codex home. Obtain
 explicit approval, resolve this skill's plugin root, and run its
-`scripts/configure.sh` with `--model` and, when needed, `--endpoint`.
+`scripts/configure.sh` with an optional `--model` and, when needed,
+`--endpoint`.
 
 Never put a key in a command, environment variable, piped or redirected standard
 input, configuration file, log, JSON, TOML, fixture, or backup. A fresh key enters

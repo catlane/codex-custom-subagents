@@ -74,6 +74,21 @@ run_uninstall() {
   sh "$UNINSTALL"
 }
 
+run_auto_configure() {
+  CODEX_HOME="$AUTO_HOME" \
+  CUSTOM_SUBAGENT_SECURITY_BIN="$TEST_HELPERS/fake-security.sh" \
+  CUSTOM_SUBAGENT_OSASCRIPT_BIN="$TEST_HELPERS/fake-osascript.sh" \
+  CUSTOM_SUBAGENT_CURL_BIN="$TEST_HELPERS/fake-curl.sh" \
+  CUSTOM_SUBAGENT_TEST_SELECTED_MODEL="$AUTO_MODEL" \
+  FAKE_SECURITY_STATE="$AUTO_STATE" \
+  FAKE_SECURITY_LOG="$AUTO_LOG" \
+  FAKE_CURL_LOG="$AUTO_CURL_LOG" \
+  FAKE_DIALOG_SCRIPT_LOG="$FAKE_DIALOG_SCRIPT_LOG" \
+  FAKE_DIALOG_VALUE=auto-secret \
+  FAKE_MODEL_DISCOVERY_MODE=success \
+  sh "$CONFIGURE"
+}
+
 run_deepseek_configure() {
   CODEX_HOME="$TEST_HOME" \
   CUSTOM_SUBAGENT_SECURITY_BIN="$TEST_HELPERS/fake-security.sh" \
@@ -388,7 +403,7 @@ assert_lock_precedes_legacy_guard() {
 assert_lock_precedes_legacy_guard configure
 assert_lock_precedes_legacy_guard uninstall
 
-for file in lifecycle.sh operation-lock.sh state.js keychain.sh prompt-secret.js; do
+for file in lifecycle.sh operation-lock.sh state.js keychain.sh prompt-secret.js model-discovery.sh model-discovery.js choose-model.js; do
   assert_same_file "$ROOT/shared/$file" "$VENDOR/$file"
 done
 
@@ -438,6 +453,51 @@ sh -c 'cd "$1" && sh "$2" --endpoint "$3" --model "$4"' sh "$UNRELATED_CWD" \
   "$COPIED_PLUGIN/scripts/configure.sh" "$ENDPOINT" "$MODEL" \
   >"$CAPTURED/standalone.out" 2>"$CAPTURED/standalone.err"
 assert_contains "$FAKE_DIALOG_SCRIPT_LOG" "$COPIED_PLUGIN/scripts/vendor/prompt-secret.js"
+
+# Omitting --model discovers the endpoint catalog and installs the selected model.
+AUTO_HOME="$TEMP_ROOT/auto-home"
+AUTO_STATE="$TEMP_ROOT/auto-keychain-state"
+AUTO_LOG="$CAPTURED/auto-security.log"
+AUTO_CURL_LOG="$CAPTURED/auto-curl.log"
+AUTO_MODEL=deepseek-v4-flash
+mkdir -p "$AUTO_HOME"
+cp "$ROOT/tests/fixtures/config-minimal.toml" "$AUTO_HOME/config.toml"
+: >"$AUTO_STATE"
+: >"$AUTO_LOG"
+: >"$AUTO_CURL_LOG"
+run_auto_configure >"$CAPTURED/auto.out" 2>"$CAPTURED/auto.err"
+assert_contains "$AUTO_HOME/custom-subagents/state.json" '"model": "deepseek-v4-flash"'
+assert_contains "$AUTO_CURL_LOG" 'https://ark.cn-beijing.volces.com/api/plan/v3/models'
+assert_not_contains "$AUTO_HOME/custom-subagents/state.json" 'auto-secret'
+
+# A failed model catalog falls back to manual input and removes a fresh key when
+# no interactive terminal is available.
+AUTO_FAIL_HOME="$TEMP_ROOT/auto-fail-home"
+AUTO_FAIL_STATE="$TEMP_ROOT/auto-fail-keychain-state"
+AUTO_FAIL_LOG="$CAPTURED/auto-fail-security.log"
+AUTO_FAIL_CURL_LOG="$CAPTURED/auto-fail-curl.log"
+mkdir -p "$AUTO_FAIL_HOME"
+cp "$ROOT/tests/fixtures/config-minimal.toml" "$AUTO_FAIL_HOME/config.toml"
+: >"$AUTO_FAIL_STATE"
+: >"$AUTO_FAIL_LOG"
+: >"$AUTO_FAIL_CURL_LOG"
+set +e
+CODEX_HOME="$AUTO_FAIL_HOME" \
+CUSTOM_SUBAGENT_SECURITY_BIN="$TEST_HELPERS/fake-security.sh" \
+CUSTOM_SUBAGENT_OSASCRIPT_BIN="$TEST_HELPERS/fake-osascript.sh" \
+CUSTOM_SUBAGENT_CURL_BIN="$TEST_HELPERS/fake-curl.sh" \
+FAKE_SECURITY_STATE="$AUTO_FAIL_STATE" \
+FAKE_SECURITY_LOG="$AUTO_FAIL_LOG" \
+FAKE_CURL_LOG="$AUTO_FAIL_CURL_LOG" \
+FAKE_DIALOG_VALUE=auto-fail-secret \
+FAKE_MODEL_DISCOVERY_MODE=unsupported \
+sh "$CONFIGURE" >"$CAPTURED/auto-fail.out" 2>"$CAPTURED/auto-fail.err"
+auto_fail_status=$?
+set -e
+assert_equals 78 "$auto_fail_status"
+assert_not_file "$AUTO_FAIL_HOME/custom-subagents/state.json"
+assert_not_contains "$AUTO_FAIL_STATE" 'codex-custom-subagent/volcengine-agent|api-key'
+assert_contains "$CAPTURED/auto-fail.err" 'rerun with --model MODEL_OR_DEPLOYMENT_ID'
 
 # Install DeepSeek first, then Volcengine, to prove provider coexistence.
 run_deepseek_configure >"$CAPTURED/deepseek.out" 2>"$CAPTURED/deepseek.err"

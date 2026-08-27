@@ -32,6 +32,15 @@ keychain_exists() {
   return "$keychain_status"
 }
 
+keychain_read() {
+  set +x
+  keychain_service_name=$(keychain_service "${1:-}") || return 1
+  "$KEYCHAIN_SECURITY_BIN" find-generic-password -s "$keychain_service_name" -a "$KEYCHAIN_ACCOUNT" -w
+  keychain_status=$?
+  keychain_service_name=
+  return "$keychain_status"
+}
+
 keychain_delete() {
   set +x
   keychain_service_name=$(keychain_service "${1:-}") || return 1

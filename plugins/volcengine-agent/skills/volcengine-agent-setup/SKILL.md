@@ -27,7 +27,8 @@ metadata. If this provider is not registered, say so without starting setup.
 
 ## Configuration
 
-Collect the user's model or deployment ID as a non-secret value. When
+Collect the endpoint as a non-secret value; the model or deployment ID is
+optional. When
 `--endpoint` is omitted, use the official default
 `https://ark.cn-beijing.volces.com/api/plan/v3`. If the user explicitly
 requests a relay or another endpoint, pass that non-secret value with
@@ -40,14 +41,20 @@ terminal prompt instead; if it reports that neither is available, give the
 user the exact configure command to run themselves in an interactive
 Terminal window.
 
-Before changing managed global Codex files, show the endpoint and model.
+After the key is entered, `scripts/configure.sh` requests `GET /models` from
+the selected endpoint. On macOS it presents a native model chooser; in a VM,
+SSH session, or other headless environment it uses terminal selection. If the
+endpoint does not support model listing or returns an unusable response, it
+falls back to manual model or deployment ID input. `--model MODEL` remains
+available for that fallback and for automation. Before changing managed global
+Codex files, show the endpoint and selected model.
 Explain that one provider registration creates the `volcengine_general`,
 `volcengine_developer`, and `volcengine_reviewer` profiles, which share the
 same endpoint, model or deployment, and Keychain credential. The managed
 lifecycle also updates the V1 catalog, workflow block, and provider state under
 the Codex home. Obtain explicit approval, resolve this skill's plugin root, and
-run `scripts/configure.sh --model ID` and add `--endpoint URL` only when an
-explicit override is requested.
+run `scripts/configure.sh` with an optional `--model ID` and add
+`--endpoint URL` only when an explicit override is requested.
 
 The user and Codex must not provide a key through a command, environment
 variable, piped or redirected standard input, config, log, JSON, TOML, fixture,

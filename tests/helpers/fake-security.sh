@@ -50,6 +50,9 @@ case "$command_name" in
       exit "${FAKE_SECURITY_FAIL_STATUS:-36}"
     fi
     if grep -F -x -- "$service|$account" "$FAKE_SECURITY_STATE" >/dev/null 2>&1; then
+      if [ "$password_from_stdin" = 1 ]; then
+        printf '%s\n' "${FAKE_SECURITY_SECRET:-fake-secret}"
+      fi
       exit 0
     fi
     exit 44

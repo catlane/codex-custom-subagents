@@ -11,10 +11,10 @@ variable, or a file.
 - Run `sh scripts/test-all.sh` from the repository and require a zero exit.
 - Install the marketplace and the two plugins sequentially. Do not run two
   `codex plugin add` commands concurrently.
-- Have the exact DeepSeek model and Volcengine model or deployment ID available
-  as non-secret values. The official endpoint defaults are used unless a relay
-  override is intentionally requested.
-- Have fresh provider keys ready to enter only in the native hidden dialogs.
+- Have fresh provider API keys ready to enter only in the native hidden
+  dialogs. The official endpoint defaults are used unless a relay override is
+  intentionally requested; models should be selected from the endpoint catalog
+  when it is available.
 - Record whether `~/.codex/config.toml` and `~/.codex/AGENTS.md` exist. For each
   existing file, record its SHA-256 without displaying its contents. This is
   the pre-configuration restoration baseline.
@@ -22,15 +22,18 @@ variable, or a file.
 
 ## Configure DeepSeek Provider
 
-1. Start Codex and ask it to use the `deepseek-agent-setup` skill with the
-   selected non-secret model. Without an endpoint override, confirm it uses
+1. Start Codex and ask it to use the `deepseek-agent-setup` skill. Without an
+   endpoint override, confirm it uses
    `https://api.deepseek.com`; an explicit non-secret endpoint may replace it
    when the user intentionally requests a relay.
-2. Confirm that Codex shows the endpoint and model and asks for approval before
+2. Confirm that Codex shows the endpoint and that the model will be discovered
+   after key entry, then asks for approval before
    changing the native agent, V1 catalog, workflow block, or state registry.
 3. Approve the managed-file change. Enter a fresh key only in the native hidden
-   macOS dialog. Cancel once and confirm that cancellation leaves no partial
-   configuration, then repeat and accept with a fresh key.
+   macOS dialog. Confirm that `GET /models` is sent to `https://api.deepseek.com`
+   and select the intended returned model. Cancel once and confirm that
+   cancellation leaves no partial configuration, then repeat and accept with a
+   fresh key. If model listing fails, verify the manual fallback appears.
 4. Confirm success is reported without displaying any credential value.
 5. Fully quit and restart Codex Desktop. Create a new task; do not reuse the
    setup task.
@@ -59,12 +62,13 @@ provider/model, or a detached main task that cannot receive the child result.
 ## Configure And Exercise Volcengine Provider
 
 1. In a separate setup conversation, ask Codex to use the
-   `volcengine-agent-setup` skill with the non-secret model or deployment ID.
+   `volcengine-agent-setup` skill.
    Without an endpoint override, confirm it uses
    `https://ark.cn-beijing.volces.com/api/plan/v3`; an explicit endpoint may
    replace it when the user intentionally requests a relay.
-2. Confirm the proposed values and approve the managed-file change. Enter a
-   fresh key only in the native hidden dialog.
+2. Confirm the endpoint and approve the managed-file change. Enter a fresh key
+   only in the native hidden dialog, then select a returned model or deployment
+   ID. Verify the manual fallback if the endpoint cannot list models.
 3. Fully quit and restart Codex Desktop, then create a new task.
 4. Before the task, inspect the generated `volcengine_reviewer.toml` and
    confirm it contains `sandbox_mode = "read-only"` and

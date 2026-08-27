@@ -53,8 +53,9 @@ configure_status=$?
 set -e
 
 [ "$configure_status" -ne 0 ] || fail 'invalid bundled catalog was accepted'
-assert_equals 0 "$(wc -c <"$FAKE_LOG" | tr -d ' ')"
-assert_equals 0 "$(wc -c <"$DIALOG_LOG" | tr -d ' ')"
+assert_contains "$FAKE_LOG" 'add|codex-custom-subagent/deepseek-agent|api-key'
+assert_contains "$FAKE_LOG" 'delete|codex-custom-subagent/deepseek-agent|api-key'
+assert_contains "$DIALOG_LOG" "$PLUGIN_ROOT/scripts/vendor/prompt-secret.js"
 assert_equals 0 "$(wc -c <"$FAKE_STATE" | tr -d ' ')"
 assert_not_file "$TEST_HOME/custom-subagents/state.json"
 assert_same_file "$ROOT/tests/fixtures/config-minimal.toml" "$TEST_HOME/config.toml"

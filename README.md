@@ -37,14 +37,14 @@ codex plugin add volcengine-agent@custom-subagents
 安装后直接在 Codex 对话中提出配置要求：
 
 ```text
-配置 DeepSeek 子智能体，模型使用 deepseek-v4-flash。
+配置 DeepSeek 子智能体。
 ```
 
 ```text
-配置火山子智能体，API 地址是 <OpenAI-compatible endpoint>，模型是 <model or endpoint ID>。
+配置火山子智能体，API 地址是 <OpenAI-compatible endpoint>。
 ```
 
-Codex 会先展示非敏感配置并请求确认。DeepSeek 默认使用 `https://api.deepseek.com`，火山默认使用 `https://ark.cn-beijing.volces.com/api/plan/v3`；如果用户要求走中转，再显式传入 endpoint 覆盖。API Key 只能在 macOS 原生隐藏输入框中填写，不要发送到聊天、命令或配置文件中。如果弹窗无法显示（例如虚拟机、SSH 或 Codex 沙盒 shell 没有图形界面权限），脚本会回退为终端隐藏输入；若两者都不可用，请按提示把同一条 configure 命令复制到自己的终端窗口里执行。配置成功后，完全重启 Codex 并新建任务。
+Codex 会先展示非敏感配置并请求确认。DeepSeek 默认使用 `https://api.deepseek.com`，火山默认使用 `https://ark.cn-beijing.volces.com/api/plan/v3`；如果用户要求走中转，再显式传入 endpoint 覆盖。输入 API Key 后，脚本会从该 endpoint 请求 `GET /models`，成功时在 macOS 原生选择框中选择模型；虚拟机、SSH 或无图形界面环境会回退到终端编号选择。若接口不支持、请求失败、返回空列表或格式不受支持，才要求手动输入模型。API Key 只能在隐藏输入框中填写，不要发送到聊天、命令或配置文件中。配置成功后，完全重启 Codex 并新建任务。
 
 ## 使用
 
@@ -108,7 +108,7 @@ codex plugin add deepseek-agent@custom-subagents
 codex plugin add volcengine-agent@custom-subagents
 ```
 
-After installation, ask Codex to configure each plugin with its non-secret model and, when needed, an endpoint override. DeepSeek defaults to `https://api.deepseek.com`, and Volcengine defaults to `https://ark.cn-beijing.volces.com/api/plan/v3`; pass a relay explicitly when requested. Enter API keys only in the native hidden macOS dialog. If the dialog cannot appear (for example in a VM, over SSH, or from a sandboxed agent shell without GUI access), the script falls back to a hidden terminal prompt; if neither is available, run the same configure command yourself in an interactive Terminal window. Restart Codex and create a fresh task after configuration.
+After installation, ask Codex to configure each plugin and, when needed, provide an endpoint override. DeepSeek defaults to `https://api.deepseek.com`, and Volcengine defaults to `https://ark.cn-beijing.volces.com/api/plan/v3`; pass a relay explicitly when requested. After the API key is entered, the script requests `GET /models` from that endpoint and lets you choose from the returned models. If the endpoint does not support model listing or returns an unusable response, it falls back to manual model input. Enter API keys only in a hidden prompt. Restart Codex and create a fresh task after configuration.
 
 ### Use
 
