@@ -5,6 +5,7 @@ set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 MARKETPLACE="$ROOT/.agents/plugins/marketplace.json"
 PLUGIN_NAMES="deepseek-agent volcengine-agent"
+EXPECTED_PLUGIN_VERSION="0.1.5"
 
 fail() {
   printf 'FAIL: %s\n' "$1" >&2
@@ -57,6 +58,7 @@ for plugin_name in $PLUGIN_NAMES; do
   assert_contains "$MARKETPLACE" "\"name\": \"$plugin_name\"" "marketplace missing $plugin_name"
   assert_contains "$MARKETPLACE" "\"path\": \"./plugins/$plugin_name\"" "wrong marketplace path for $plugin_name"
   assert_contains "$manifest" "\"name\": \"$plugin_name\"" "manifest name mismatch for $plugin_name"
+  assert_contains "$manifest" "\"version\": \"$EXPECTED_PLUGIN_VERSION\"" "plugin version is stale: $plugin_name"
   grep -E '"version"[[:space:]]*:[[:space:]]*"[0-9]+\.[0-9]+\.[0-9]+([+-][^"]+)?"' "$manifest" >/dev/null 2>&1 ||
     fail "manifest version is not semver: $plugin_name"
   assert_dir "$plugin_root/skills"
