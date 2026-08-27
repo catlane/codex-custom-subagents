@@ -194,16 +194,15 @@ failure returns.
 
 If a custom subagent starts and its turn fails with an HTTP `404` from the
 provider endpoint, the request reached the provider; this is not a Codex
-account-group or catalog problem. Check the registered wire API first:
-plugins before 0.1.4 registered providers with `wire_api = "responses"`,
-but DeepSeek and Volcengine OpenAI-compatible endpoints only serve Chat
-Completions, so Codex received `404` for the unsupported path. Upgrade the
-plugin to 0.1.4 or later, rerun its conversational configuration (the
-existing Keychain credential is reused when the endpoint is unchanged),
-fully quit Codex, and retry in a fresh task. If `404` persists on 0.1.4 or
-later, verify the configured model name exists on the provider's official
-model list and that the endpoint URL is exactly the provider's documented
-base URL.
+account-group or catalog problem. Check the registered wire API and endpoint
+pair first. The current DeepSeek and Volcengine profiles use
+`wire_api = "responses"`; rerun configuration after upgrading the plugin,
+fully quit Codex, and retry in a fresh task. If `404` persists, verify that
+the configured endpoint supports `/responses`, that the model name exists on
+the provider's official model list, and that the endpoint URL is exactly the
+intended base URL. An endpoint may support Chat Completions while exposing a
+different Responses-compatible route through a relay, so a successful chat
+request alone does not validate a `wire_api = "responses"` registration.
 
 ## Fail-Closed Recovery
 

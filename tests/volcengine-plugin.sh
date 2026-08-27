@@ -492,7 +492,7 @@ for role in general developer reviewer; do
   assert_contains "$profile_agent" "name = \"volcengine_$role\""
   assert_contains "$profile_agent" 'model_provider = "volcengine"'
   assert_contains "$profile_agent" "base_url = \"$ENDPOINT\""
-  assert_contains "$profile_agent" 'wire_api = "chat"'
+  assert_contains "$profile_agent" 'wire_api = "responses"'
   assert_contains "$profile_agent" 'requires_openai_auth = false'
   assert_contains "$profile_agent" 'args = ["find-generic-password", "-w", "-s", "codex-custom-subagent/volcengine-agent", "-a", "api-key"]'
   assert_not_contains "$profile_agent" '[agent]'

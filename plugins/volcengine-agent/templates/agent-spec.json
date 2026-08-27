@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "provider_display_name": "Volcengine",
-  "wire_api": "chat",
+  "wire_api": "responses",
   "profiles": {
     "general": {
       "description": "Volcengine general-purpose subagent for bounded analysis, investigation, and execution",
