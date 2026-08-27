@@ -27,8 +27,11 @@ metadata. If this provider is not registered, say so without starting setup.
 
 ## Configuration
 
-Collect the user's exact OpenAI-compatible endpoint and model or deployment ID
-as non-secret values. Both are required; do not guess or offer defaults.
+Collect the user's model or deployment ID as a non-secret value. When
+`--endpoint` is omitted, use the official default
+`https://ark.cn-beijing.volces.com/api/plan/v3`. If the user explicitly
+requests a relay or another endpoint, pass that non-secret value with
+`--endpoint`.
 Do not accept, quote, retain, or reuse an API key pasted in chat. State that the
 exposed value cannot be used and that a fresh key must be entered only through
 the native hidden dialog. When the dialog cannot appear (a VM, SSH, or a
@@ -43,7 +46,8 @@ Explain that one provider registration creates the `volcengine_general`,
 same endpoint, model or deployment, and Keychain credential. The managed
 lifecycle also updates the V1 catalog, workflow block, and provider state under
 the Codex home. Obtain explicit approval, resolve this skill's plugin root, and
-run `scripts/configure.sh --endpoint URL --model ID`.
+run `scripts/configure.sh --model ID` and add `--endpoint URL` only when an
+explicit override is requested.
 
 The user and Codex must not provide a key through a command, environment
 variable, piped or redirected standard input, config, log, JSON, TOML, fixture,

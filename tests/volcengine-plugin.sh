@@ -392,17 +392,27 @@ for file in lifecycle.sh operation-lock.sh state.js keychain.sh prompt-secret.js
   assert_same_file "$ROOT/shared/$file" "$VENDOR/$file"
 done
 
-# Endpoint and deployment/model are both mandatory; no guessed default may reach Keychain.
-for args in "--model $MODEL" "--endpoint $ENDPOINT"; do
-  before_log=$(cksum "$FAKE_LOG")
-  set +e
-  # shellcheck disable=SC2086
-  sh "$CONFIGURE" $args >"$CAPTURED/missing.out" 2>"$CAPTURED/missing.err"
-  status=$?
-  set -e
-  [ "$status" -ne 0 ] || fail "missing required Volcengine setting unexpectedly succeeded: $args"
-  assert_equals "$before_log" "$(cksum "$FAKE_LOG")"
-done
+# Omitting --endpoint uses Volcengine's official Ark endpoint by default.
+DEFAULT_ENDPOINT='https://ark.cn-beijing.volces.com/api/plan/v3'
+DEFAULT_HOME="$TEMP_ROOT/default-endpoint-home"
+DEFAULT_STATE="$TEMP_ROOT/default-endpoint-keychain-state"
+DEFAULT_LOG="$CAPTURED/default-endpoint-security.log"
+mkdir -p "$DEFAULT_HOME"
+cp "$ROOT/tests/fixtures/config-minimal.toml" "$DEFAULT_HOME/config.toml"
+: >"$DEFAULT_STATE"
+: >"$DEFAULT_LOG"
+FAKE_DIALOG_VALUE=default-endpoint-secret \
+CODEX_HOME="$DEFAULT_HOME" CUSTOM_SUBAGENT_SECURITY_BIN="$TEST_HELPERS/fake-security.sh" \
+CUSTOM_SUBAGENT_OSASCRIPT_BIN="$TEST_HELPERS/fake-osascript.sh" \
+FAKE_SECURITY_STATE="$DEFAULT_STATE" FAKE_SECURITY_LOG="$DEFAULT_LOG" \
+FAKE_DIALOG_SCRIPT_LOG="$FAKE_DIALOG_SCRIPT_LOG" \
+sh "$CONFIGURE" --model "$MODEL" >"$CAPTURED/default-endpoint.out" 2>"$CAPTURED/default-endpoint.err"
+assert_contains "$DEFAULT_HOME/agents/volcengine_developer.toml" "base_url = \"$DEFAULT_ENDPOINT\""
+assert_not_contains "$DEFAULT_HOME/agents/volcengine_developer.toml" 'rabbit-api.com'
+CODEX_HOME="$DEFAULT_HOME" CUSTOM_SUBAGENT_SECURITY_BIN="$TEST_HELPERS/fake-security.sh" \
+CUSTOM_SUBAGENT_OSASCRIPT_BIN="$TEST_HELPERS/fake-osascript.sh" \
+FAKE_SECURITY_STATE="$DEFAULT_STATE" FAKE_SECURITY_LOG="$DEFAULT_LOG" \
+sh "$UNINSTALL" >"$CAPTURED/default-uninstall.out" 2>"$CAPTURED/default-uninstall.err"
 
 # A copied marketplace cache must be standalone and use its vendored prompt.
 STANDALONE_MARKETPLACE="$TEMP_ROOT/standalone-marketplace"
@@ -431,6 +441,9 @@ assert_contains "$FAKE_DIALOG_SCRIPT_LOG" "$COPIED_PLUGIN/scripts/vendor/prompt-
 
 # Install DeepSeek first, then Volcengine, to prove provider coexistence.
 run_deepseek_configure >"$CAPTURED/deepseek.out" 2>"$CAPTURED/deepseek.err"
+sed 's/model = "gpt-5.6-sol"/model = "gpt-5.6-luna"/' \
+  "$TEST_HOME/config.toml" >"$CAPTURED/config.luna.toml"
+mv "$CAPTURED/config.luna.toml" "$TEST_HOME/config.toml"
 FAKE_DIALOG_VALUE=$SENTINEL
 run_configure >"$CAPTURED/configure.out" 2>"$CAPTURED/configure.err"
 
@@ -459,6 +472,7 @@ assert_contains "$STATE" "\"endpoint\": \"$ENDPOINT\""
 assert_contains "$STATE" "\"model\": \"$MODEL\""
 assert_contains "$STATE" '"id": "deepseek-agent"'
 assert_contains "$CATALOG" '"id": "official:gpt-5.6-sol"'
+assert_contains "$CATALOG" '"id": "official:gpt-5.6-luna"'
 assert_contains "$CATALOG" '"slug": "unrelated-model"'
 assert_contains "$CATALOG" '"multi_agent_version": "v1"'
 assert_not_contains "$CATALOG" "volcengine:$MODEL"
@@ -824,6 +838,8 @@ assert_contains "$SETUP_SKILL" '`multi_agent_version` equal to `v1`'
 assert_contains "$SETUP_SKILL" 'The user and Codex must not provide a key'
 assert_contains "$SETUP_SKILL" "adapter's private pipe"
 assert_contains "$SETUP_SKILL" 'same endpoint'
+assert_contains "$SETUP_SKILL" 'https://ark.cn-beijing.volces.com/api/plan/v3'
+assert_contains "$SETUP_SKILL" 'requests a relay'
 assert_contains "$SETUP_SKILL" 'changing only the model or deployment is'
 assert_contains "$SETUP_SKILL" "plugin's uninstall cleanup first"
 assert_contains "$SETUP_SKILL" 'general, developer, and reviewer'

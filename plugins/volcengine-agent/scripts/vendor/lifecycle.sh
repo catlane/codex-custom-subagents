@@ -268,7 +268,9 @@ prepare_catalog() {
 
   state_file="$SUBAGENT_HOME/custom-subagents/state.json"
   if [ -f "$state_file" ]; then
-    primary_model=$(jxa primary-model "$state_file")
+    config_file="$SUBAGENT_HOME/config.toml"
+    jxa validate-config-catalog-state "$state_file" "$config_file" >/dev/null
+    primary_model=$(jxa config-primary "$config_file" "$TEST_PRIMARY_MODEL")
     base_catalog_input="$SUBAGENT_HOME/custom-subagents/base-model-catalog.json"
     base_catalog_source=$(jxa base-catalog-source "$state_file")
     base_catalog_source_kind=$(jxa base-catalog-source-kind "$state_file")
@@ -471,13 +473,15 @@ install() {
     else
       jxa validate-lifecycle-state "$state_file" "$catalog_file" "$base_catalog_file" >/dev/null
     fi
-    jxa validate-config-state "$state_file" "$config_file" >/dev/null
-    primary_model=$(jxa primary-model "$state_file")
+    stored_primary_model=$(jxa primary-model "$state_file")
     base_catalog_source=$(jxa base-catalog-source "$state_file")
     base_catalog_source_kind=$(jxa base-catalog-source-kind "$state_file")
-    jxa validate-base-catalog "$base_catalog_file" "$primary_model" >/dev/null
+    jxa validate-config-catalog-state "$state_file" "$config_file" >/dev/null
+    jxa validate-base-catalog "$base_catalog_file" "$stored_primary_model" >/dev/null
     jxa validate-catalog-matches-state "$state_file" "$base_catalog_file" "$catalog_file" >/dev/null
     validate_workflow_matches_state "$workflow_file" "$state_file"
+    primary_model=$(jxa config-primary "$config_file" "$TEST_PRIMARY_MODEL")
+    jxa validate-base-catalog "$base_catalog_file" "$primary_model" >/dev/null
     original_json=null
     initial_config_shape=$(jxa initial-config-shape "$state_file")
   else

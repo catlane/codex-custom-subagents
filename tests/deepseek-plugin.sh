@@ -396,6 +396,7 @@ FAKE_DIALOG_SCRIPT_LOG="$FAKE_DIALOG_SCRIPT_LOG" \
 sh -c 'cd "$1" && sh "$2" --model deepseek-chat' sh "$UNRELATED_CWD" "$COPIED_PLUGIN/scripts/configure.sh" \
   >"$CAPTURED/standalone.out" 2>"$CAPTURED/standalone.err"
 assert_contains "$FAKE_DIALOG_SCRIPT_LOG" "$COPIED_PLUGIN/scripts/vendor/prompt-secret.js"
+assert_contains "$STANDALONE_HOME/agents/deepseek_developer.toml" 'base_url = "https://api.deepseek.com"'
 
 FAKE_DIALOG_VALUE=$SENTINEL
 run_configure https://api.deepseek.com deepseek-chat >"$CAPTURED/configure.out" 2>"$CAPTURED/configure.err"
@@ -693,6 +694,8 @@ assert_contains "$SETUP_SKILL" 'piped or redirected standard'
 assert_contains "$SETUP_SKILL" 'hidden terminal fallback'
 assert_contains "$SETUP_SKILL" "adapter's private pipe"
 assert_contains "$SETUP_SKILL" 'same endpoint'
+assert_contains "$SETUP_SKILL" 'https://api.deepseek.com'
+assert_contains "$SETUP_SKILL" 'explicitly requests a relay'
 assert_contains "$SETUP_SKILL" 'changing only the model is allowed'
 assert_contains "$SETUP_SKILL" "plugin's uninstall cleanup first"
 assert_contains "$SETUP_SKILL" 'general, developer, and reviewer'

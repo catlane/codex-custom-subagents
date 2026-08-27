@@ -27,15 +27,16 @@ metadata. If this provider is not registered, say so without starting setup.
 
 ## Configuration
 
-Collect only the non-secret endpoint and model in conversation. Use
-`https://api.deepseek.com` when the user accepts the default endpoint. Do not
-accept, quote, retain, or reuse an API key pasted in chat. State that the
-exposed value cannot be used and that a fresh key must be entered only through
-the native hidden dialog. When the dialog cannot appear (a VM, SSH, or a
-sandboxed agent shell without GUI access), the script falls back to a hidden
-terminal prompt instead; if it reports that neither is available, give the
-user the exact configure command to run themselves in an interactive
-Terminal window.
+Collect only the non-secret endpoint and model in conversation. When
+`--endpoint` is omitted, use the official default `https://api.deepseek.com`.
+If the user explicitly requests a relay or another endpoint, pass that
+non-secret value with `--endpoint`. Do not accept, quote, retain, or reuse an
+API key pasted in chat. State that the exposed value cannot be used and that a
+fresh key must be entered only through the native hidden dialog. When the
+dialog cannot appear (a VM, SSH, or a sandboxed agent shell without GUI
+access), the script falls back to a hidden terminal prompt instead; if it
+reports that neither is available, give the user the exact configure command
+to run themselves in an interactive Terminal window.
 
 Before changing managed global Codex files, show the intended endpoint and
 model. Explain that one provider registration creates the `deepseek_general`,

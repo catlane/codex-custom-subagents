@@ -94,6 +94,32 @@ for boundary in 1 2 3 4 5 6 7; do
   rm -rf "$CASE_ROOT"
 done
 
+# Adding a provider after a primary-model switch remains transactional at every
+# write boundary and leaves the pre-existing provider untouched.
+for boundary in 1 2 3 4 5 6 7; do
+  CASE_ROOT=$(mktemp -d /private/tmp/custom-subagents-drift-rollback.XXXXXX)
+  make_case "$CASE_ROOT"
+  CASE_PLUGIN="$CASE_ROOT/deepseek-agent"
+  run_case install deepseek-agent deepseek http://localhost:11434 fixture-model
+  sed 's/model = "gpt-5.6-sol"/model = "gpt-5.6-luna"/' \
+    "$CASE_HOME/config.toml" >"$CASE_ROOT/config.luna.toml"
+  mv "$CASE_ROOT/config.luna.toml" "$CASE_HOME/config.toml"
+  snapshot_active "$CASE_ROOT/before"
+  CASE_PLUGIN="$CASE_ROOT/volcengine-agent"
+  mkdir -p "$CASE_PLUGIN/.codex-plugin"
+  printf '%s\n' '{"name":"volcengine-agent"}' >"$CASE_PLUGIN/.codex-plugin/plugin.json"
+  cp "$ROOT/tests/fixtures/agent-spec.json" "$CASE_PLUGIN/agent-spec.json"
+  if ( export CUSTOM_SUBAGENT_FAIL_AFTER_WRITE="$boundary"; run_case \
+    install volcengine-agent volcengine http://localhost:11434 fixture-model-2 ) >/dev/null 2>&1; then
+    fail "primary-model drift failure boundary $boundary unexpectedly succeeded"
+  fi
+  assert_active_equals "$CASE_ROOT/before"
+  for role in general developer reviewer; do
+    assert_not_file "$CASE_HOME/agents/volcengine_${role}.toml"
+  done
+  rm -rf "$CASE_ROOT"
+done
+
 # Last-provider uninstall removes all three profiles transactionally with the
 # config, workflow, state, and both catalogs.
 for boundary in 1 2 3 4 5 6 7 8; do

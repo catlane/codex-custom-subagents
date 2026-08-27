@@ -154,6 +154,42 @@ assert_not_file "$STATE"
 assert_not_file "$CATALOG"
 assert_not_file "$BASE_CATALOG"
 
+# A normal Codex primary-model switch must refresh the shared catalog and state
+# while adding a second provider.
+DRIFT_HOME="$TEMP_ROOT/model-drift-home"
+mkdir -p "$DRIFT_HOME"
+cp "$ROOT/tests/fixtures/config-minimal.toml" "$DRIFT_HOME/config.toml"
+run_for "$DRIFT_HOME" "$DEEPSEEK_PLUGIN" \
+  install deepseek-agent deepseek http://localhost:11434 fixture-model
+sed 's/model = "gpt-5.6-sol"/model = "gpt-5.6-luna"/' \
+  "$DRIFT_HOME/config.toml" >"$TEMP_ROOT/config.luna.toml"
+mv "$TEMP_ROOT/config.luna.toml" "$DRIFT_HOME/config.toml"
+run_for "$DRIFT_HOME" "$VOLCENGINE_PLUGIN" \
+  install volcengine-agent volcengine http://localhost:11434 fixture-model-2
+assert_contains "$DRIFT_HOME/custom-subagents/state.json" '"primary_model": "gpt-5.6-luna"'
+assert_contains "$DRIFT_HOME/custom-subagents/models-v1.json" '"slug": "gpt-5.6-luna"'
+assert_contains "$DRIFT_HOME/custom-subagents/models-v1.json" '"multi_agent_version": "v1"'
+for role in general developer reviewer; do
+  assert_file "$DRIFT_HOME/agents/deepseek_${role}.toml"
+  assert_file "$DRIFT_HOME/agents/volcengine_${role}.toml"
+done
+
+# A managed catalog-path change is still rejected even when primary-model drift is valid.
+PATH_TAMPER_HOME="$TEMP_ROOT/model-drift-path-tamper-home"
+mkdir -p "$PATH_TAMPER_HOME"
+cp "$ROOT/tests/fixtures/config-minimal.toml" "$PATH_TAMPER_HOME/config.toml"
+run_for "$PATH_TAMPER_HOME" "$DEEPSEEK_PLUGIN" \
+  install deepseek-agent deepseek http://localhost:11434 fixture-model
+sed 's/model_catalog_json = ".*"/model_catalog_json = "\/tmp\/foreign-models.json"/' \
+  "$PATH_TAMPER_HOME/config.toml" >"$TEMP_ROOT/config.path-tampered.toml"
+mv "$TEMP_ROOT/config.path-tampered.toml" "$PATH_TAMPER_HOME/config.toml"
+path_tamper_state=$(cksum "$PATH_TAMPER_HOME/custom-subagents/state.json")
+path_tamper_catalog=$(cksum "$PATH_TAMPER_HOME/custom-subagents/models-v1.json")
+assert_rejected model-drift-path-tamper run_for "$PATH_TAMPER_HOME" "$DEEPSEEK_PLUGIN" \
+  install deepseek-agent deepseek http://localhost:11434 fixture-model
+assert_equals "$path_tamper_state" "$(cksum "$PATH_TAMPER_HOME/custom-subagents/state.json")"
+assert_equals "$path_tamper_catalog" "$(cksum "$PATH_TAMPER_HOME/custom-subagents/models-v1.json")"
+
 # Every profile is preflighted before the first managed write.
 UNMANAGED_HOME="$TEMP_ROOT/unmanaged-home"
 mkdir -p "$UNMANAGED_HOME/agents"

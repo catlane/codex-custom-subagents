@@ -9,7 +9,7 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 PLUGIN_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 VENDOR_DIR="$SCRIPT_DIR/vendor"
 CODEX_HOME=${CODEX_HOME:-"$HOME/.codex"}
-ENDPOINT=
+ENDPOINT=https://ark.cn-beijing.volces.com/api/plan/v3
 MODEL=
 
 [ -f "$SCRIPT_DIR/runtime-gate.sh" ] && [ ! -L "$SCRIPT_DIR/runtime-gate.sh" ] || {
@@ -25,7 +25,7 @@ die() {
 }
 
 usage() {
-  printf '%s\n' 'usage: configure.sh --endpoint URL --model MODEL_OR_DEPLOYMENT_ID' >&2
+  printf '%s\n' 'usage: configure.sh [--endpoint URL] --model MODEL_OR_DEPLOYMENT_ID' >&2
   exit 64
 }
 
@@ -45,7 +45,6 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-[ -n "$ENDPOINT" ] || usage
 [ -n "$MODEL" ] || usage
 [ -d "$CODEX_HOME" ] || die "CODEX_HOME must be an existing directory"
 [ -f "$PLUGIN_ROOT/templates/agent-spec.json" ] || die 'agent spec is missing'

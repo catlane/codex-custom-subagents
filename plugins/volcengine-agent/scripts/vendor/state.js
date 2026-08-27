@@ -322,9 +322,14 @@ function updateState(path, providerJson, catalogPath, baseCatalogPath, baseCatal
   return state;
 }
 function validateConfigMatchesState(statePath, configPath) {
+  validateConfigCatalogMatchesState(statePath, configPath);
   const state = stateAt(statePath);
   const config = configAt(configPath, null);
   if (config.primary_model !== state.primary_model) fail("active primary model does not match lifecycle state");
+}
+function validateConfigCatalogMatchesState(statePath, configPath) {
+  const state = stateAt(statePath);
+  const config = configAt(configPath, null);
   if (config.catalog_path !== state.catalog_path) fail("managed model_catalog_json setting does not match state");
 }
 function writeState(path, output) {
@@ -513,6 +518,10 @@ function run(argv) {
   }
   if (command === "validate-config-state") {
     validateConfigMatchesState(argv[1], argv[2]);
+    return "";
+  }
+  if (command === "validate-config-catalog-state") {
+    validateConfigCatalogMatchesState(argv[1], argv[2]);
     return "";
   }
   if (command === "render-agent-spec-args") {

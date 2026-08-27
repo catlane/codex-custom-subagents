@@ -92,7 +92,7 @@
 - Create: `tests/deepseek-plugin.sh`
 
 **Interfaces:**
-- Consumes: endpoint default `https://api.deepseek.com`, user-selected model, and Keychain service `codex-custom-subagent/deepseek-developer`.
+- Consumes: endpoint default `https://api.deepseek.com` unless an explicit endpoint override is supplied, the user-selected model, and Keychain service `codex-custom-subagent/deepseek-developer`.
 - Produces: native agent type `deepseek_developer` with fixed development role.
 
 - [ ] Write a failing plugin test that configures DeepSeek in a temporary home and asserts exact provider/agent IDs, endpoint/model substitution, development instructions, state registration, and workflow routing.
@@ -113,11 +113,11 @@
 - Create: `tests/volcengine-plugin.sh`
 
 **Interfaces:**
-- Consumes: user-provided Volcengine OpenAI-compatible endpoint and model deployment ID, plus Keychain service `codex-custom-subagent/volcengine-reviewer`.
+- Consumes: endpoint default `https://ark.cn-beijing.volces.com/api/plan/v3` unless an explicit endpoint override is supplied, the user-selected model deployment ID, and Keychain service `codex-custom-subagent/volcengine-reviewer`.
 - Produces: native agent type `volcengine_reviewer` with read-only review as its default responsibility.
 
 - [ ] Write a failing plugin test asserting reviewer-only instructions, no implicit write authority, endpoint/deployment substitution, state registration, and coexistence with DeepSeek.
-- [ ] Add setup/uninstall skills with the same security and cleanup contract as DeepSeek but no guessed endpoint or model default.
+- [ ] Add setup/uninstall skills with the same security and cleanup contract as DeepSeek, including the official endpoint default and explicit override behavior.
 - [ ] Add the exact-schema reviewer spec requiring findings-first output, severity, file/line evidence, regression/security/data-integrity checks, and explicit remaining test gaps; lifecycle code renders the native TOML.
 - [ ] Regenerate the workflow from both registered roles and assert development routes to DeepSeek followed by independent Volcengine review.
 - [ ] Run `sh tests/volcengine-plugin.sh`; expect all assertions to pass.
