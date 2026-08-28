@@ -111,7 +111,7 @@ keychain_prompt_store() {
         return 2
         ;;
     esac
-    printf '%s\n' "custom-subagents: native dialog and terminal prompt are both unavailable service=$keychain_service_name account=$KEYCHAIN_ACCOUNT; run this configure command in an interactive Terminal window" >&2
+    printf '%s\n' "custom-subagents: native dialog and terminal prompt are both unavailable service=$keychain_service_name account=$KEYCHAIN_ACCOUNT; rerun this configure command with elevated (unsandboxed) execution so the native dialog can appear, or run it yourself in an interactive Terminal window" >&2
     keychain_service_name=
     return 1
   fi

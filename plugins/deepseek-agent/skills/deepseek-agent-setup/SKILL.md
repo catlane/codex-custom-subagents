@@ -32,15 +32,22 @@ Collect the non-secret endpoint in conversation; the model is optional. When
 If the user explicitly requests a relay or another endpoint, pass that
 non-secret value with `--endpoint`. Do not accept, quote, retain, or reuse an
 API key pasted in chat. State that the exposed value cannot be used and that a
-fresh key must be entered only through the native hidden dialog. When the
-dialog cannot appear (a VM, SSH, or a sandboxed agent shell without GUI
-access), the script falls back to a hidden terminal prompt instead; if it
-reports that neither is available, give the user the exact configure command
-to run themselves in an interactive Terminal window.
+fresh key must be entered only through the native hidden dialog. Elevated
+(unsandboxed) execution with an interactive terminal attached is mandatory for
+`scripts/configure.sh`: request the user's approval for that elevation and run
+the script only with it, because a sandboxed agent shell cannot present the
+native hidden dialog or the native model chooser, and without an interactive
+terminal even the hidden fallback prompts cannot be answered. If the user
+declines elevation, stop: do not configure, do not attempt any fallback, and
+never substitute hand-written agent files, environment variables, or launcher
+scripts for this managed flow. The only remaining path is to give the user the
+exact configure command to run themselves in an interactive Terminal window.
 
 After the key is entered, `scripts/configure.sh` requests `GET /models` from
-the selected endpoint. On macOS it presents a native model chooser; in a VM,
-SSH session, or other headless environment it uses terminal selection. If the
+the selected endpoint. On macOS it presents a native model chooser when the
+script runs with GUI access, which is why agent-driven configuration requires
+elevated execution; in a VM, SSH session, or other headless environment it
+uses terminal selection. If the
 endpoint does not support model listing or returns an unusable response, it
 falls back to manual model input. `--model MODEL` remains available for that
 fallback and for automation. Before changing managed global Codex files, show
