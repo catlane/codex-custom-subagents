@@ -104,7 +104,24 @@ model_discovery_resolve() {
   model_discovery_agent_id=$2
   model_discovery_parser=$3
   model_discovery_choice_script=$4
-  model_discovery_response=$(model_discovery_fetch "$model_discovery_endpoint" "$model_discovery_agent_id" 2>/dev/null) || return 78
-  model_discovery_models=$(model_discovery_parse "$model_discovery_response" "$model_discovery_parser" 2>/dev/null) || return 78
+  model_discovery_errfile=$(/usr/bin/mktemp "${TMPDIR:-/tmp}/custom-subagents-models.XXXXXX") || return 78
+  # Surface fetch and parse failure reasons. curl errors contain only the
+  # HTTP status and URL (the key travels via a stdin header, never argv),
+  # and parser errors are static messages.
+  if ! model_discovery_response=$(model_discovery_fetch "$model_discovery_endpoint" "$model_discovery_agent_id" 2>"$model_discovery_errfile"); then
+    model_discovery_fetch_reason=$(/usr/bin/awk 'NF { print; exit }' "$model_discovery_errfile")
+    /bin/rm -f "$model_discovery_errfile"
+    [ -n "$model_discovery_fetch_reason" ] &&
+      printf '%s\n' "custom-subagents: model list fetch failed: $model_discovery_fetch_reason" >&2
+    return 78
+  fi
+  if ! model_discovery_models=$(model_discovery_parse "$model_discovery_response" "$model_discovery_parser" 2>"$model_discovery_errfile"); then
+    model_discovery_parse_reason=$(/usr/bin/awk 'NF { print; exit }' "$model_discovery_errfile")
+    /bin/rm -f "$model_discovery_errfile"
+    [ -n "$model_discovery_parse_reason" ] &&
+      printf '%s\n' "custom-subagents: model list response unusable: $model_discovery_parse_reason" >&2
+    return 78
+  fi
+  /bin/rm -f "$model_discovery_errfile"
   model_discovery_select "$model_discovery_models" "$model_discovery_parser" "$model_discovery_choice_script"
 }
