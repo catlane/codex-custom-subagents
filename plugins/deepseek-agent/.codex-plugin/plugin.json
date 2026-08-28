@@ -1,6 +1,6 @@
 {
   "name": "deepseek-agent",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "在 Codex Desktop 中配置和管理 DeepSeek 通用、开发及只读审查子智能体。",
   "author": {
     "name": "猫巷",

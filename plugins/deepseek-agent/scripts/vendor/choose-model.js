@@ -8,10 +8,12 @@ function run(argv) {
 
   const app = Application.currentApplication();
   app.includeStandardAdditions = true;
-  const selected = app.chooseFromList($(models), {
+  // macOS 26 JXA rejects NSArray arguments here (-1700 coercion); plain
+  // JavaScript arrays and strings are accepted.
+  const selected = app.chooseFromList(models, {
     withPrompt: "Select a model",
     title: "Codex custom subagent",
-    defaultItems: [$(models[0])],
+    defaultItems: [models[0]],
     multipleSelectionsAllowed: false,
     emptySelectionAllowed: false,
   });
