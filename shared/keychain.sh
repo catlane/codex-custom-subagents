@@ -91,13 +91,21 @@ keychain_prompt_store_tty() {
 keychain_prompt_store() {
   set +x
   keychain_service_name=$(keychain_service "${1:-}") || return 1
+  keychain_prompt_errfile=$(/usr/bin/mktemp "${TMPDIR:-/tmp}/custom-subagents-prompt.XXXXXX") || return 1
   if keychain_prompt_response=$("$KEYCHAIN_OSASCRIPT_BIN" -l JavaScript "$KEYCHAIN_PROMPT_SECRET_SCRIPT" \
-    "$KEYCHAIN_EXPECT_HELPER" "$keychain_service_name" "$KEYCHAIN_ACCOUNT" 2>/dev/null); then
+    "$KEYCHAIN_EXPECT_HELPER" "$keychain_service_name" "$KEYCHAIN_ACCOUNT" 2>"$keychain_prompt_errfile"); then
+    /bin/rm -f "$keychain_prompt_errfile"
     :
   else
     # The native dialog could not run at all (for example a VM, SSH, or
-    # sandboxed agent shell without GUI access). Fall back to a hidden
+    # sandboxed agent shell without GUI access). Surface the osascript
+    # failure reason (it never contains the secret: failures happen before
+    # input or inside the storage transport), then fall back to a hidden
     # terminal prompt when an interactive terminal is attached.
+    keychain_prompt_reason=$(/usr/bin/awk 'NF { print; exit }' "$keychain_prompt_errfile")
+    /bin/rm -f "$keychain_prompt_errfile"
+    [ -n "$keychain_prompt_reason" ] &&
+      printf '%s\n' "custom-subagents: native dialog failed: $keychain_prompt_reason" >&2
     keychain_prompt_response=
     keychain_secret=
     keychain_prompt_store_tty "$keychain_service_name" && keychain_tty_status=0 || keychain_tty_status=$?

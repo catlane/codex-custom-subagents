@@ -82,13 +82,19 @@ model_discovery_select() {
     printf '%s\n' "$CUSTOM_SUBAGENT_TEST_SELECTED_MODEL"
     return 0
   fi
-  if model_discovery_selected=$(model_discovery_choose "$model_discovery_selection_json" "$model_discovery_choice_script" 2>/dev/null); then
+  model_discovery_errfile=$(/usr/bin/mktemp "${TMPDIR:-/tmp}/custom-subagents-choose.XXXXXX") || return 78
+  if model_discovery_selected=$(model_discovery_choose "$model_discovery_selection_json" "$model_discovery_choice_script" 2>"$model_discovery_errfile"); then
+    /bin/rm -f "$model_discovery_errfile"
     case "$model_discovery_selected" in
       cancelled) return 2 ;;
       '') return 78 ;;
       *) printf '%s\n' "$model_discovery_selected"; return 0 ;;
     esac
   fi
+  model_discovery_choose_reason=$(/usr/bin/awk 'NF { print; exit }' "$model_discovery_errfile")
+  /bin/rm -f "$model_discovery_errfile"
+  [ -n "$model_discovery_choose_reason" ] &&
+    printf '%s\n' "custom-subagents: native model chooser failed: $model_discovery_choose_reason" >&2
   model_discovery_prompt_tty "$model_discovery_lines_text"
 }
 
